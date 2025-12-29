@@ -1,0 +1,26 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    ".venv"
+  ],
+  "reportMissingTypeStubs": true,
+  "reportCallInDefaultInitializer": "none",
+  "extraPaths": [
+    "src"
+  ],
+  "typeCheckingMode": "strict",
+  "reportAny": "error",
+  "reportUnknownVariableType": "error",
+  "reportUnknownMemberType": "error",
+  "reportUnknownArgumentType": "error",
+  "reportUnknownParameterType": "error",
+  "reportMissingTypeArgument": "error",
+  "pythonVersion": "3.12"
+}

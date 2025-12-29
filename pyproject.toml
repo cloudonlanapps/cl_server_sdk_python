@@ -1,0 +1,92 @@
+[project]
+name = "cl-client"
+version = "0.1.0"
+description = "Python client library for CL Server compute service"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+    {name = "Ananda Sarangaram"}
+]
+keywords = ["compute", "client", "tasks", "jobs", "mqtt"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "basedpyright>=1.36.2",       # Strict type checker
+    "click>=8.1.0",               # CLI framework
+    "httpx>=0.28.1",              # Async HTTP client
+    "paho-mqtt>=2.1.0",           # MQTT client for monitoring
+    "pydantic>=2.12.5",           # Schema validation
+    "rich>=13.0.0",               # Rich terminal output for CLI
+]
+
+[project.scripts]
+cl_client = "cl_client.cli:main"  # CLI tool entry point
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.1",
+    "pillow>=11.0.0",             # Image validation in tests
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+]
+all = [
+    "cl-client[dev]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cl_client"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+source = ["src/cl_client"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "F811", "F401", "UP",
+    "F841",  # local variable assigned but never used
+    "B018",  # useless expression
+]
+ignore = ["E501"]
