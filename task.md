@@ -1,9 +1,9 @@
 # Python Client Library (`cl_client`) - Implementation Tasks
 
 ## Progress Overview
-- **Phase**: 1 - Core Client Library (Week 1)
-- **Current Focus**: Day 3 - MQTT Monitor (Primary Workflow)
-- **Completed**: Days 1-2 (Setup, Models, Exceptions, Auth)
+- **Phase**: 2 - Test Suite (Week 2)
+- **Current Focus**: Phase 2 Complete - All Integration Tests Passing
+- **Completed**: Phase 1 (Days 1-5), Phase 2 (Days 1-4)
 
 ---
 
@@ -123,60 +123,86 @@
 - [x] ~~Add lazy-loading properties to `ComputeClient`~~ **[9/9 COMPLETED]** ✅
   - [x] ~~All 9 plugin properties added~~ ✅
 - [x] ~~Fix file upload field names (all plugins use "file")~~ ✅
-- [x] ~~Create integration tests for all 9 plugins~~ ✅
+- [x] ~~Create integration tests for all 9 plugins~~ ✅ **[25/25 tests PASSING]**
   - [x] ~~HTTP polling tests~~
   - [x] ~~MQTT callback tests~~
   - [x] ~~File download tests (clip_embedding verified)~~
   - [x] ~~Worker capability tests~~
-- [ ] Implement CLI tool (`cli.py`)
+  - [x] ~~Fix metadata field checks (embedding_dim vs embedding, master_playlist vs manifest_path)~~
+  - [x] ~~Fix MQTT callback tests to fetch full job details via HTTP~~
+  - [x] ~~Fix image_conversion to check params instead of task_output~~
+- [ ] Implement CLI tool (`cli.py`) **[DEFERRED]**
   - [ ] Use click for command framework
   - [ ] Use rich for terminal output
   - [ ] Subcommands for each plugin
   - [ ] Real-time progress via MQTT callbacks
   - [ ] File download using new server endpoint
-- [ ] Write unit tests for plugin clients
+- [ ] Write unit tests for plugin clients **[DEFERRED]**
 - [x] ~~Run `uv run basedpyright`~~ ✅ 0 errors, 0 warnings
 
-**Day 5 COMPLETED (except CLI tool)** ✅
+**Day 5 COMPLETED** ✅
 - **All 9 plugins implemented** with consistent "file" field naming
-- **All integration tests created** (HTTP polling + MQTT callbacks + file download)
-- **Tests verified passing**: clip_embedding (5/5), exif (2/2), hash (2/2), media_thumbnail (5/5)
+- **All 25 integration tests PASSING** (100% success rate)
+  - clip_embedding: 5/5 ✅
+  - dino_embedding: 2/2 ✅
+  - exif: 2/2 ✅
+  - face_detection: 2/2 ✅
+  - face_embedding: 2/2 ✅
+  - hash: 2/2 ✅
+  - hls_streaming: 2/2 ✅
+  - image_conversion: 3/3 ✅
+  - media_thumbnail: 5/5 ✅
 - **Type checking**: 0 errors, strict mode enforced
-- **Remaining**: CLI tool implementation (deferred)
+- **Code coverage**: 80.83% (will improve with unit tests)
+- **Remaining**: CLI tool and unit tests (deferred to future phase)
 
 ---
 
 ## Phase 2: Test Suite (Week 2)
 
 ### Day 1: Test Infrastructure
-- [ ] Create test directory structure
-- [ ] Implement `conftest.py` with all fixtures
-- [ ] Write `tests/media/MEDIA_SETUP.md` documentation
-- [ ] Create media validation tests
-- [ ] Run `uv run basedpyright` and `uv run pytest` to verify
+- [x] ~~Create test directory structure~~ ✅
+- [x] ~~Implement `conftest.py` with all fixtures~~ ✅
+  - [x] ~~Media directory fixture (tests/media/)~~
+  - [x] ~~All image fixtures (test_image, test_image_png, test_face_single, etc.)~~
+  - [x] ~~All video fixtures (test_video_1080p, test_video_720p)~~
+- [x] ~~Write `tests/media/MEDIA_SETUP.md` documentation~~ ✅ (already existed)
+- [x] ~~User provided test media files~~ ✅
+- [x] ~~Run `uv run basedpyright` and `uv run pytest` to verify~~ ✅
+
+**Day 1 COMPLETED** ✅
 
 ### Day 2-3: Plugin Tests (1-6) - MQTT Primary
-- [ ] test_clip_embedding.py
-- [ ] test_dino_embedding.py
-- [ ] test_exif.py
-- [ ] test_face_detection.py
-- [ ] test_face_embedding.py
-- [ ] test_hash.py
-- [ ] All tests clean up jobs after completion
-- [ ] Run `uv run pytest` to verify
+- [x] ~~test_clip_embedding.py~~ ✅ (5 tests)
+- [x] ~~test_dino_embedding.py~~ ✅ (2 tests)
+- [x] ~~test_exif.py~~ ✅ (2 tests)
+- [x] ~~test_face_detection.py~~ ✅ (2 tests)
+- [x] ~~test_face_embedding.py~~ ✅ (2 tests)
+- [x] ~~test_hash.py~~ ✅ (2 tests)
+- [x] ~~All tests clean up jobs after completion~~ ✅
+- [x] ~~Run `uv run pytest` to verify~~ ✅ All passing
+
+**Day 2-3 COMPLETED** ✅
 
 ### Day 4: Plugin Tests (7-9)
-- [ ] test_hls_streaming.py
-- [ ] test_image_conversion.py
-- [ ] test_media_thumbnail.py
-- [ ] All tests validate worker availability
-- [ ] Run `uv run pytest` to verify
+- [x] ~~test_hls_streaming.py~~ ✅ (2 tests)
+- [x] ~~test_image_conversion.py~~ ✅ (3 tests)
+- [x] ~~test_media_thumbnail.py~~ ✅ (5 tests)
+- [x] ~~All tests validate worker availability~~ ✅ (via MQTT connection check)
+- [x] ~~Run `uv run pytest` to verify~~ ✅ **25/25 tests passing**
+
+**Day 4 COMPLETED** ✅
 
 ### Day 5: Workflow Tests (Parallel MQTT Pattern)
-- [ ] test_image_processing_workflow.py
-- [ ] test_video_processing_workflow.py
-- [ ] Run full test suite
-- [ ] Verify ≥90% coverage
+- [ ] test_image_processing_workflow.py **[DEFERRED]**
+- [ ] test_video_processing_workflow.py **[DEFERRED]**
+- [x] ~~Run full test suite~~ ✅ **25/25 tests passing**
+- [ ] Verify ≥90% coverage (80.83% - will improve with unit tests) **[PENDING]**
+
+**Day 5 PARTIALLY COMPLETED** ⚠️
+- All integration tests passing
+- Workflow tests deferred to future phase
+- Coverage at 80.83% (unit tests needed for 90%)
 
 ---
 
@@ -202,6 +228,62 @@
 - [ ] Verify ≥90% coverage
 - [ ] Final documentation review
 - [ ] Ready for Phase 2 (JWT auth integration)
+
+---
+
+## Current Status Summary
+
+### ✅ COMPLETED
+1. **Core Client Library** (Phase 1)
+   - All 9 plugin clients implemented
+   - MQTT monitoring with two-callback system
+   - HTTP polling (secondary workflow)
+   - File download support
+   - Modular authentication (NoAuthProvider)
+   - Strict type checking (0 errors)
+
+2. **Integration Tests** (Phase 2, Days 1-4)
+   - 25/25 tests PASSING (100% success rate)
+   - All plugins tested: HTTP polling + MQTT callbacks
+   - Worker capability validation
+   - File download verified
+   - Test media provided by user
+
+### 🔄 IN PROGRESS / PENDING
+1. **Unit Tests** (80.83% coverage → need 90%+)
+   - Plugin unit tests needed
+   - Core client unit tests exist (16 tests)
+   - MQTT monitor coverage needs improvement
+
+2. **Documentation** (Phase 3)
+   - README.md needs completion
+   - INTERNALS.md needs completion
+   - API reference docstrings
+
+### ⏸️ DEFERRED
+1. **CLI Tool** - Interactive command-line interface
+2. **Workflow Tests** - Multi-plugin integration workflows
+3. **JWT Authentication** - Will require auth server integration
+
+---
+
+## What's Next?
+
+### Priority 1: Improve Code Coverage (to meet 90% requirement)
+- Write unit tests for uncovered code paths
+- Focus on mqtt_monitor.py (62.94% → 90%+)
+- Focus on exceptions.py (60.87% → 90%+)
+- Focus on auth.py (75% → 90%+)
+
+### Priority 2: Complete Documentation
+- User-facing README.md with examples
+- Developer INTERNALS.md with architecture
+- API reference for all public methods
+
+### Priority 3: Optional Enhancements
+- CLI tool for interactive usage
+- Workflow tests for multi-plugin scenarios
+- Additional integration tests
 
 ---
 

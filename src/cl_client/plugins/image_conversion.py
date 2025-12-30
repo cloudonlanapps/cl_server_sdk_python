@@ -69,7 +69,7 @@ class ImageConversionClient(BasePluginClient):
             output_path = job.task_output["output_path"]
             print(f"Converted to WebP: {output_path}")
         """
-        params: dict[str, object] = {"output_format": output_format}
+        params: dict[str, object] = {"format": output_format}
         if quality is not None:
             params["quality"] = quality
 

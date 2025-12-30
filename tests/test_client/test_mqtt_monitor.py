@@ -62,9 +62,8 @@ def test_subscribe_job_updates_returns_subscription_id(monitor, mock_mqtt_client
     assert isinstance(sub_id, str)
     assert len(sub_id) == 36  # UUID format
 
-    # Verify MQTT subscription was created
-    expected_topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
-    mock_mqtt_client.subscribe.assert_called_with(expected_topic)
+    # Verify subscription was registered (MQTT subscribe happens once during init)
+    assert sub_id in monitor._job_subscriptions
 
 
 def test_multiple_subscriptions_same_job(monitor, mock_mqtt_client):
@@ -93,9 +92,9 @@ def test_unsubscribe_with_subscription_id(monitor, mock_mqtt_client):
     # Verify subscription removed
     assert sub_id not in monitor._job_subscriptions
 
-    # Verify MQTT unsubscribe called (no other subs for this job)
-    expected_topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
-    mock_mqtt_client.unsubscribe.assert_called_with(expected_topic)
+    # MQTT topic remains subscribed (single events topic for all jobs)
+    # No unsubscribe should be called
+    mock_mqtt_client.unsubscribe.assert_not_called()
 
 
 def test_unsubscribe_keeps_topic_if_other_subs_exist(monitor, mock_mqtt_client):
@@ -112,15 +111,18 @@ def test_unsubscribe_keeps_topic_if_other_subs_exist(monitor, mock_mqtt_client):
     # Unsubscribe first one
     monitor.unsubscribe(sub_id_1)
 
-    # MQTT unsubscribe should NOT be called (sub_id_2 still active)
-    mock_mqtt_client.unsubscribe.assert_not_called()
+    # Verify first subscription removed
+    assert sub_id_1 not in monitor._job_subscriptions
+    assert sub_id_2 in monitor._job_subscriptions
 
     # Now unsubscribe second one
     monitor.unsubscribe(sub_id_2)
 
-    # Now MQTT unsubscribe should be called
-    expected_topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
-    mock_mqtt_client.unsubscribe.assert_called_once_with(expected_topic)
+    # Verify both subscriptions removed
+    assert sub_id_2 not in monitor._job_subscriptions
+
+    # MQTT topic remains subscribed (single events topic for all jobs)
+    mock_mqtt_client.unsubscribe.assert_not_called()
 
 
 def test_two_callback_system(monitor, mock_mqtt_client):
@@ -152,19 +154,17 @@ def test_two_callback_system(monitor, mock_mqtt_client):
 
     # Manually trigger the handler (simulating MQTT message)
     mock_msg = MagicMock()
-    mock_msg.topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
+    mock_msg.topic = ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC
     mock_msg.payload = json.dumps(
         {
             "job_id": job_id,
-            "task_type": "test_task",
-            "status": "in_progress",
+            "event_type": "in_progress",
             "progress": 50,
-            "created_at": 1234567890,
-            "params": {},
+            "timestamp": 1234567890,
         }
     ).encode()
 
-    monitor._handle_job_status(mock_msg)
+    monitor._handle_job_event(mock_msg)
 
     # on_progress should be called, on_complete should NOT
     assert len(progress_calls) == 1
@@ -174,15 +174,13 @@ def test_two_callback_system(monitor, mock_mqtt_client):
     mock_msg.payload = json.dumps(
         {
             "job_id": job_id,
-            "task_type": "test_task",
-            "status": "completed",
+            "event_type": "completed",
             "progress": 100,
-            "created_at": 1234567890,
-            "params": {},
+            "timestamp": 1234567891,
         }
     ).encode()
 
-    monitor._handle_job_status(mock_msg)
+    monitor._handle_job_event(mock_msg)
 
     # Both callbacks should be called now
     assert len(progress_calls) == 2  # Called for both updates
@@ -306,18 +304,18 @@ def test_close(monitor, mock_mqtt_client):
 def test_invalid_json_message_handling(monitor, mock_mqtt_client):
     """Test that invalid JSON messages are handled gracefully."""
     mock_msg = MagicMock()
-    mock_msg.topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/test-job"
+    mock_msg.topic = ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC
     mock_msg.payload = b"invalid json {{"
 
     # Should not raise exception
-    monitor._handle_job_status(mock_msg)
+    monitor._handle_job_event(mock_msg)
 
 
 def test_invalid_dict_message_handling(monitor, mock_mqtt_client):
     """Test that non-dict JSON messages are handled gracefully."""
     mock_msg = MagicMock()
-    mock_msg.topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/test-job"
+    mock_msg.topic = ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC
     mock_msg.payload = b'"not a dict"'
 
     # Should not raise exception
-    monitor._handle_job_status(mock_msg)
+    monitor._handle_job_event(mock_msg)

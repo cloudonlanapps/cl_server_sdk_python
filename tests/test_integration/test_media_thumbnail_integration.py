@@ -10,26 +10,6 @@ import pytest
 from cl_client import ComputeClient
 
 
-@pytest.fixture
-def test_image() -> Path:
-    """Get test image path.
-    
-    Looks for test images in standard locations.
-    """
-    # Try multiple locations
-    locations = [
-        Path("/Users/anandasarangaram/Work/images"),
-        Path("/Users/anandasarangaram/Work/test_media/images"),
-        Path.home() / "Work" / "images",
-    ]
-    
-    for loc in locations:
-        if loc.exists():
-            images = list(loc.glob("*.jpg"))
-            if images:
-                return images[0]
-    
-    pytest.skip("No test images found. Please provide test images.")
 
 
 @pytest.mark.integration

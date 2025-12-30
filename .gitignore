@@ -209,3 +209,5 @@ CLAUDE.md
 **/.DS_Store
 PROJECT_STRUCTURE.md
 plan.md.backup
+tests/media/images/**
+tests/media/videos/**

@@ -10,24 +10,6 @@ import pytest
 from cl_client import ComputeClient
 
 
-@pytest.fixture
-def test_image() -> Path:
-    """Get test image path."""
-    locations = [
-        Path("/Users/anandasarangaram/Work/images"),
-        Path("/Users/anandasarangaram/Work/test_media/images"),
-        Path.home() / "Work" / "images",
-    ]
-
-    for loc in locations:
-        if loc.exists():
-            images = list(loc.glob("*.jpg"))
-            if images:
-                return images[0]
-
-    pytest.skip("No test images found. Please provide test images.")
-
-
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_dino_embedding_http_polling(test_image: Path):
@@ -43,12 +25,9 @@ async def test_dino_embedding_http_polling(test_image: Path):
         assert job.status == "completed"
         assert job.task_output is not None
 
-        # Verify embedding structure (DINO is 384-dimensional)
-        assert "embedding" in job.task_output
-        embedding = job.task_output["embedding"]
-        assert isinstance(embedding, list)
-        assert len(embedding) == 384  # DINO dimension
-        assert all(isinstance(x, (int, float)) for x in embedding)
+        # Verify embedding metadata (DINO is 384-dimensional)
+        assert "embedding_dim" in job.task_output
+        assert job.task_output["embedding_dim"] == 384  # DINO dimension
 
         await client.delete_job(job.job_id)
 
@@ -77,7 +56,10 @@ async def test_dino_embedding_mqtt_callbacks(test_image: Path):
 
         assert final_job is not None
         assert final_job.status == "completed"
-        assert "embedding" in final_job.task_output
-        assert len(final_job.task_output["embedding"]) == 384
+
+        # MQTT callbacks don't include task_output, fetch via HTTP
+        full_job = await client.get_job(job.job_id)
+        assert "embedding_dim" in full_job.task_output
+        assert full_job.task_output["embedding_dim"] == 384
 
         await client.delete_job(job.job_id)

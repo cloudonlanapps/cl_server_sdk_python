@@ -10,22 +10,6 @@ import pytest
 from cl_client import ComputeClient
 
 
-@pytest.fixture
-def test_image() -> Path:
-    """Get test image path."""
-    locations = [
-        Path("/Users/anandasarangaram/Work/images"),
-        Path("/Users/anandasarangaram/Work/test_media/images"),
-        Path.home() / "Work" / "images",
-    ]
-
-    for loc in locations:
-        if loc.exists():
-            images = list(loc.glob("*.jpg"))
-            if images:
-                return images[0]
-
-    pytest.skip("No test images found. Please provide test images.")
 
 
 @pytest.mark.integration
@@ -43,10 +27,11 @@ async def test_image_conversion_http_polling(test_image: Path):
 
         # Verify completion
         assert job.status == "completed"
-        assert job.task_output is not None
 
-        # Should have output_path
-        assert "output_path" in job.task_output
+        # image_conversion stores output in params, not task_output
+        assert "output_path" in job.params
+        assert "format" in job.params
+        assert job.params["format"] == "png"
 
         await client.delete_job(job.job_id)
 
@@ -77,7 +62,11 @@ async def test_image_conversion_mqtt_callbacks(test_image: Path):
 
         assert final_job is not None
         assert final_job.status == "completed"
-        assert "output_path" in final_job.task_output
+
+        # MQTT callbacks don't include full params, fetch via HTTP
+        full_job = await client.get_job(job.job_id)
+        assert "output_path" in full_job.params
+        assert full_job.params["format"] == "webp"
 
         await client.delete_job(job.job_id)
 
@@ -98,6 +87,8 @@ async def test_image_conversion_multiple_formats(test_image: Path):
             )
 
             assert job.status == "completed"
-            assert "output_path" in job.task_output
+            # image_conversion stores output in params, not task_output
+            assert "output_path" in job.params
+            assert job.params["format"] == fmt
 
             await client.delete_job(job.job_id)

@@ -10,22 +10,6 @@ import pytest
 from cl_client import ComputeClient
 
 
-@pytest.fixture
-def test_image() -> Path:
-    """Get test image path."""
-    locations = [
-        Path("/Users/anandasarangaram/Work/images"),
-        Path("/Users/anandasarangaram/Work/test_media/images"),
-        Path.home() / "Work" / "images",
-    ]
-
-    for loc in locations:
-        if loc.exists():
-            images = list(loc.glob("*.jpg"))
-            if images:
-                return images[0]
-
-    pytest.skip("No test images found. Please provide test images.")
 
 
 @pytest.mark.integration
@@ -74,6 +58,9 @@ async def test_face_detection_mqtt_callbacks(test_image: Path):
 
         assert final_job is not None
         assert final_job.status == "completed"
-        assert "faces" in final_job.task_output
+
+        # MQTT callbacks don't include task_output, fetch via HTTP
+        full_job = await client.get_job(job.job_id)
+        assert "faces" in full_job.task_output
 
         await client.delete_job(job.job_id)

@@ -17,7 +17,7 @@ def test_mqtt_config():
     assert ComputeClientConfig.MQTT_BROKER_HOST == "localhost"
     assert ComputeClientConfig.MQTT_BROKER_PORT == 1883
     assert ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX == "inference/workers"
-    assert ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX == "inference/job_status"
+    assert ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC == "inference/events"
 
 
 def test_core_endpoints():
