@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
@@ -30,12 +31,14 @@ class MQTTJobMonitor:
         self,
         broker: str | None = None,
         port: int | None = None,
+        connect_timeout: float = 5.0,
     ) -> None:
         """Initialize MQTT monitor.
 
         Args:
             broker: MQTT broker host (default from config)
             port: MQTT broker port (default from config)
+            connect_timeout: Timeout for initial connection in seconds (default 5.0)
         """
         self.broker = broker or ComputeClientConfig.MQTT_BROKER_HOST
         self.port = port or ComputeClientConfig.MQTT_BROKER_PORT
@@ -49,14 +52,23 @@ class MQTTJobMonitor:
         self._workers: dict[str, WorkerCapability] = {}
         self._worker_callbacks: list[Callable[[str, WorkerCapability | None], None]] = []
 
+        # Connection event for blocking until connected
+        self._connect_event = threading.Event()
+        self._connected = False
+
         # MQTT client
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)  # type: ignore[attr-defined]
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
-        self._connected = False
 
-        # Connect to broker
+        # Connect to broker and wait for connection
         self._connect()
+
+        # Wait for connection to establish (blocking)
+        if not self._connect_event.wait(timeout=connect_timeout):
+            logger.warning(f"MQTT connection timeout after {connect_timeout}s")
+        elif not self._connected:
+            logger.warning("MQTT connection failed")
 
     def _connect(self) -> None:
         """Connect to MQTT broker."""
@@ -89,6 +101,14 @@ class MQTTJobMonitor:
             self._client.subscribe(capability_topic)
             logger.debug(f"Subscribed to worker capabilities: {capability_topic}")
 
+            # Subscribe to job events (single topic for all jobs)
+            events_topic = ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC
+            self._client.subscribe(events_topic)
+            logger.debug(f"Subscribed to job events: {events_topic}")
+
+        # Signal connection attempt complete (success or failure)
+        self._connect_event.set()
+
     def _on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         """Handle incoming MQTT messages."""
         _ = (client, userdata)
@@ -97,9 +117,9 @@ class MQTTJobMonitor:
             # Check if it's a worker capability message
             if msg.topic.startswith(ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX):
                 self._handle_worker_capability(msg)
-            # Check if it's a job status message
-            elif msg.topic.startswith(ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX):
-                self._handle_job_status(msg)
+            # Check if it's a job event message
+            elif msg.topic == ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC:
+                self._handle_job_event(msg)
         except Exception as e:
             logger.error(f"Error handling MQTT message: {e}", exc_info=True)
 
@@ -157,46 +177,86 @@ class MQTTJobMonitor:
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             logger.warning(f"Invalid worker capability message: {e}")
 
-    def _handle_job_status(self, msg: mqtt.MQTTMessage) -> None:
-        """Handle job status message."""
+    def _handle_job_event(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle job event message from inference/events topic."""
         if not msg.payload:
             return
 
         try:
-            # json.loads returns Any, which we validate immediately
+            # Parse event message
             if not isinstance(
                 data_parsed := json.loads(msg.payload.decode()),  # type: ignore[misc]
                 dict,
             ):
-                logger.warning("Invalid job status message: not a dict")
+                logger.warning("Invalid job event message: not a dict")
                 return
 
-            # Safe to cast after isinstance check
             data = cast(dict[str, object], data_parsed)
 
-            from .models import JobResponse
+            # Extract event fields
+            job_id_val = data.get("job_id")
+            event_type_val = data.get("event_type")
+            progress_val = data.get("progress", 0)
+            timestamp_val = data.get("timestamp", 0)
 
-            job = JobResponse(**data)  # type: ignore[arg-type]
+            if not job_id_val or not event_type_val:
+                logger.warning("Job event missing required fields")
+                return
+
+            job_id = str(job_id_val)
+            event_type = str(event_type_val)
+
+            # Map event_type to status
+            status_map = {
+                "queued": "queued",
+                "processing": "in_progress",
+                "completed": "completed",
+                "failed": "failed",
+            }
+            status = status_map.get(event_type, event_type)
 
             # Find matching subscriptions for this job
-            for _sub_id, (job_id, on_progress, on_complete) in list(self._job_subscriptions.items()):
-                if job_id == job.job_id:
-                    # Call on_progress callback for any status update
-                    if on_progress:
-                        try:
-                            on_progress(job)
-                        except Exception as e:
-                            logger.error(f"Error in on_progress callback: {e}", exc_info=True)
+            for _sub_id, (sub_job_id, on_progress, on_complete) in list(
+                self._job_subscriptions.items()
+            ):
+                if sub_job_id != job_id:
+                    continue
 
-                    # Call on_complete callback only for terminal states
-                    if job.status in ["completed", "failed"] and on_complete:
-                        try:
-                            on_complete(job)
-                        except Exception as e:
-                            logger.error(f"Error in on_complete callback: {e}", exc_info=True)
+                # Create minimal JobResponse from event data
+                # Note: We don't have full job details from event, just status/progress
+                from .models import JobResponse
 
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning(f"Invalid job status message: {e}")
+                job = JobResponse(
+                    job_id=job_id,
+                    task_type="unknown",  # Not in event message
+                    status=status,
+                    progress=int(progress_val) if isinstance(progress_val, (int, float)) else 0,
+                    created_at=int(timestamp_val) if isinstance(timestamp_val, (int, float)) else 0,
+                    params={},
+                    task_output=None,
+                    error_message=None,
+                    priority=5,
+                    updated_at=None,
+                    started_at=None,
+                    completed_at=None,
+                )
+
+                # Call on_progress callback for any status update
+                if on_progress:
+                    try:
+                        on_progress(job)
+                    except Exception as e:
+                        logger.error(f"Error in on_progress callback: {e}", exc_info=True)
+
+                # Call on_complete callback only for terminal states
+                if status in ["completed", "failed"] and on_complete:
+                    try:
+                        on_complete(job)
+                    except Exception as e:
+                        logger.error(f"Error in on_complete callback: {e}", exc_info=True)
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Invalid job event message: {e}")
 
     def _update_worker(self, capability: WorkerCapability) -> None:
         """Update worker capability state."""
@@ -251,13 +311,10 @@ class MQTTJobMonitor:
         # Generate unique subscription ID
         subscription_id = str(uuid.uuid4())
 
-        # Store subscription
+        # Store subscription (no need to subscribe to MQTT - already subscribed to events topic)
         self._job_subscriptions[subscription_id] = (job_id, on_progress, on_complete)
 
-        # Subscribe to job status topic
-        job_topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
-        self._client.subscribe(job_topic)
-        logger.debug(f"Subscribed to job {job_id} (sub_id: {subscription_id})")
+        logger.debug(f"Registered callbacks for job {job_id} (sub_id: {subscription_id})")
 
         return subscription_id
 
@@ -274,16 +331,7 @@ class MQTTJobMonitor:
         job_id, _, _ = self._job_subscriptions[subscription_id]
         del self._job_subscriptions[subscription_id]
 
-        # Check if any other subscriptions exist for this job
-        has_other_subs = any(
-            jid == job_id for jid, _, _ in self._job_subscriptions.values()
-        )
-
-        # Unsubscribe from MQTT topic only if no other subscriptions exist
-        if not has_other_subs:
-            job_topic = f"{ComputeClientConfig.MQTT_JOB_STATUS_TOPIC_PREFIX}/{job_id}"
-            self._client.unsubscribe(job_topic)
-            logger.debug(f"Unsubscribed from job {job_id}")
+        logger.debug(f"Removed callbacks for job {job_id} (sub_id: {subscription_id})")
 
     def get_worker_capabilities(self) -> dict[str, WorkerCapability]:
         """Get current worker capabilities (synchronous, from cached state)."""

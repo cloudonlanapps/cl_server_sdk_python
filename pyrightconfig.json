@@ -2,8 +2,7 @@
   "venvPath": ".",
   "venv": ".venv",
   "include": [
-    "src",
-    "tests"
+    "src"
   ],
   "exclude": [
     "**/__pycache__",

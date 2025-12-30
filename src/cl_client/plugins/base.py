@@ -127,8 +127,6 @@ class BasePluginClient:
                 timeout=30.0
             )
         """
-        from ..models import JobResponse
-
         # Prepare multipart file uploads
         files_data: dict[str, tuple[str, object, str]] = {}
         for name, path in files.items():
@@ -158,14 +156,22 @@ class BasePluginClient:
             )
             response.raise_for_status()
 
-            # Parse response
+            # Parse response - may be minimal (just job_id)
             data_raw: object = response.json()  # type: ignore[misc]
             if not isinstance(data_raw, dict):
                 msg = f"Invalid response format: expected dict, got {type(data_raw)}"
                 raise ValueError(msg)
 
             data = cast(dict[str, object], data_raw)
-            job = JobResponse(**data)  # type: ignore[arg-type]
+
+            # Get job_id from response
+            job_id = str(data.get("job_id", ""))
+            if not job_id:
+                msg = "Server response missing job_id"
+                raise ValueError(msg)
+
+            # Fetch full job details (submission response may be minimal)
+            job = await self.client.get_job(job_id)
 
             # Subscribe to MQTT callbacks if provided
             if on_progress or on_complete:

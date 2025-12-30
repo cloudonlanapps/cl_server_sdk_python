@@ -22,7 +22,7 @@ class ComputeClientConfig:
     MQTT_BROKER_HOST: str = "localhost"
     MQTT_BROKER_PORT: int = 1883
     MQTT_CAPABILITY_TOPIC_PREFIX: str = "inference/workers"
-    MQTT_JOB_STATUS_TOPIC_PREFIX: str = "inference/job_status"
+    MQTT_JOB_EVENTS_TOPIC: str = "inference/events"  # Single topic for all job events
 
     # Core API Endpoints
     ENDPOINT_GET_JOB: str = "/jobs/{job_id}"

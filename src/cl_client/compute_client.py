@@ -24,6 +24,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from .models import JobResponse, WorkerCapabilitiesResponse
+    from .plugins.clip_embedding import ClipEmbeddingClient
+    from .plugins.dino_embedding import DinoEmbeddingClient
+    from .plugins.exif import ExifClient
+    from .plugins.face_detection import FaceDetectionClient
+    from .plugins.face_embedding import FaceEmbeddingClient
+    from .plugins.hash import HashClient
+    from .plugins.hls_streaming import HlsStreamingClient
+    from .plugins.image_conversion import ImageConversionClient
+    from .plugins.media_thumbnail import MediaThumbnailClient
 
 
 class ComputeClient:
@@ -280,6 +289,192 @@ class ComputeClient:
                 backoff * ComputeClientConfig.POLL_BACKOFF_MULTIPLIER,
                 ComputeClientConfig.MAX_POLL_BACKOFF,
             )
+
+    # ============================================================================
+    # Plugin Access (Lazy-loaded properties)
+    # ============================================================================
+
+    @property
+    def clip_embedding(self) -> ClipEmbeddingClient:
+        """Access CLIP embedding plugin.
+
+        Returns:
+            ClipEmbeddingClient instance
+
+        Example:
+            job = await client.clip_embedding.embed_image(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            embedding = job.task_output["embedding"]
+        """
+        if not hasattr(self, "_clip_embedding"):
+            from .plugins.clip_embedding import ClipEmbeddingClient
+
+            self._clip_embedding = ClipEmbeddingClient(self)
+        return self._clip_embedding  # type: ignore[has-type]
+
+    @property
+    def dino_embedding(self) -> DinoEmbeddingClient:
+        """Access DINO embedding plugin.
+
+        Returns:
+            DinoEmbeddingClient instance
+
+        Example:
+            job = await client.dino_embedding.embed_image(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            embedding = job.task_output["embedding"]
+        """
+        if not hasattr(self, "_dino_embedding"):
+            from .plugins.dino_embedding import DinoEmbeddingClient
+
+            self._dino_embedding = DinoEmbeddingClient(self)
+        return self._dino_embedding  # type: ignore[has-type]
+
+    @property
+    def exif(self) -> ExifClient:
+        """Access EXIF extraction plugin.
+
+        Returns:
+            ExifClient instance
+
+        Example:
+            job = await client.exif.extract(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            metadata = job.task_output
+        """
+        if not hasattr(self, "_exif"):
+            from .plugins.exif import ExifClient
+
+            self._exif = ExifClient(self)
+        return self._exif  # type: ignore[has-type]
+
+    @property
+    def face_detection(self) -> FaceDetectionClient:
+        """Access face detection plugin.
+
+        Returns:
+            FaceDetectionClient instance
+
+        Example:
+            job = await client.face_detection.detect(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            faces = job.task_output["faces"]
+        """
+        if not hasattr(self, "_face_detection"):
+            from .plugins.face_detection import FaceDetectionClient
+
+            self._face_detection = FaceDetectionClient(self)
+        return self._face_detection  # type: ignore[has-type]
+
+    @property
+    def face_embedding(self) -> FaceEmbeddingClient:
+        """Access face embedding plugin.
+
+        Returns:
+            FaceEmbeddingClient instance
+
+        Example:
+            job = await client.face_embedding.embed_faces(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            embeddings = job.task_output["embeddings"]
+        """
+        if not hasattr(self, "_face_embedding"):
+            from .plugins.face_embedding import FaceEmbeddingClient
+
+            self._face_embedding = FaceEmbeddingClient(self)
+        return self._face_embedding  # type: ignore[has-type]
+
+    @property
+    def hash(self) -> HashClient:
+        """Access perceptual hash plugin.
+
+        Returns:
+            HashClient instance
+
+        Example:
+            job = await client.hash.compute(
+                image=Path("photo.jpg"),
+                wait=True
+            )
+            hashes = job.task_output
+        """
+        if not hasattr(self, "_hash"):
+            from .plugins.hash import HashClient
+
+            self._hash = HashClient(self)
+        return self._hash  # type: ignore[has-type]
+
+    @property
+    def hls_streaming(self) -> HlsStreamingClient:
+        """Access HLS streaming plugin.
+
+        Returns:
+            HlsStreamingClient instance
+
+        Example:
+            job = await client.hls_streaming.generate_manifest(
+                video=Path("video.mp4"),
+                wait=True
+            )
+            manifest = job.task_output["manifest_path"]
+        """
+        if not hasattr(self, "_hls_streaming"):
+            from .plugins.hls_streaming import HlsStreamingClient
+
+            self._hls_streaming = HlsStreamingClient(self)
+        return self._hls_streaming  # type: ignore[has-type]
+
+    @property
+    def image_conversion(self) -> ImageConversionClient:
+        """Access image conversion plugin.
+
+        Returns:
+            ImageConversionClient instance
+
+        Example:
+            job = await client.image_conversion.convert(
+                image=Path("photo.png"),
+                output_format="jpg",
+                quality=90,
+                wait=True
+            )
+            output = job.task_output["output_path"]
+        """
+        if not hasattr(self, "_image_conversion"):
+            from .plugins.image_conversion import ImageConversionClient
+
+            self._image_conversion = ImageConversionClient(self)
+        return self._image_conversion  # type: ignore[has-type]
+
+    @property
+    def media_thumbnail(self) -> MediaThumbnailClient:
+        """Access media thumbnail plugin.
+
+        Returns:
+            MediaThumbnailClient instance
+
+        Example:
+            job = await client.media_thumbnail.generate(
+                media=Path("video.mp4"),
+                width=256,
+                height=256
+            )
+        """
+        if not hasattr(self, "_media_thumbnail"):
+            from .plugins.media_thumbnail import MediaThumbnailClient
+
+            self._media_thumbnail = MediaThumbnailClient(self)
+        return self._media_thumbnail  # type: ignore[has-type]
 
     # ============================================================================
     # Cleanup
