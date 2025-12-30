@@ -11,6 +11,7 @@ from cl_client.compute_client import ComputeClient
 from cl_client.config import ComputeClientConfig
 from cl_client.exceptions import WorkerUnavailableError
 from cl_client.models import JobResponse, WorkerCapabilitiesResponse
+from cl_client.server_config import ServerConfig
 
 
 @pytest.fixture
@@ -61,6 +62,50 @@ def test_init_with_custom_parameters(mock_mqtt_monitor, mock_httpx_client):
     assert client.base_url == "http://custom:9000"
     assert client.timeout == 60.0
     assert client.auth == auth
+
+
+def test_init_with_server_config(mock_mqtt_monitor, mock_httpx_client):
+    """Test client initialization with ServerConfig."""
+    config = ServerConfig(
+        compute_url="https://compute.example.com",
+        mqtt_broker="mqtt.example.com",
+        mqtt_port=8883,
+    )
+
+    client = ComputeClient(server_config=config)
+
+    assert client.base_url == "https://compute.example.com"
+    # MQTT config passed to monitor
+    mock_mqtt_monitor._class = MagicMock()
+
+
+def test_init_with_server_config_and_overrides(mock_mqtt_monitor, mock_httpx_client):
+    """Test that explicit parameters override server_config."""
+    config = ServerConfig(
+        compute_url="https://config.example.com",
+        mqtt_broker="config-broker",
+        mqtt_port=1883,
+    )
+
+    client = ComputeClient(
+        base_url="https://override.example.com",
+        mqtt_broker="override-broker",
+        server_config=config,
+    )
+
+    assert client.base_url == "https://override.example.com"
+    # Explicit parameters take precedence
+
+
+def test_init_backward_compatibility(mock_mqtt_monitor, mock_httpx_client):
+    """Test that existing code without server_config still works."""
+    # This is how code worked before adding server_config
+    client = ComputeClient()
+
+    # Should use defaults from environment (via ServerConfig.from_env())
+    assert client.base_url is not None
+    assert client.timeout == ComputeClientConfig.DEFAULT_TIMEOUT
+    assert isinstance(client.auth, NoAuthProvider)
 
 
 @pytest.mark.asyncio

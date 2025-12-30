@@ -19,6 +19,7 @@ import httpx
 from .auth import AuthProvider, NoAuthProvider
 from .config import ComputeClientConfig
 from .mqtt_monitor import MQTTJobMonitor
+from .server_config import ServerConfig
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,17 +54,34 @@ class ComputeClient:
         mqtt_broker: str | None = None,
         mqtt_port: int | None = None,
         auth_provider: AuthProvider | None = None,
+        server_config: ServerConfig | None = None,
     ) -> None:
         """Initialize compute client.
 
         Args:
-            base_url: Server base URL (default from config)
-            timeout: Request timeout in seconds (default from config)
-            mqtt_broker: MQTT broker host (default from config)
-            mqtt_port: MQTT broker port (default from config)
+            base_url: Server base URL (overrides server_config.compute_url)
+            timeout: Request timeout in seconds (default from ComputeClientConfig)
+            mqtt_broker: MQTT broker host (overrides server_config.mqtt_broker)
+            mqtt_port: MQTT broker port (overrides server_config.mqtt_port)
             auth_provider: Authentication provider (default: NoAuthProvider)
+            server_config: Server configuration (default: from environment)
+
+        Example (Simple):
+            client = ComputeClient()  # Uses defaults
+
+        Example (With auth):
+            auth = JWTAuthProvider(token="...")
+            client = ComputeClient(auth_provider=auth)
+
+        Example (Custom config):
+            config = ServerConfig(compute_url="https://api.example.com")
+            client = ComputeClient(server_config=config)
         """
-        self.base_url = base_url or ComputeClientConfig.DEFAULT_BASE_URL
+        # Get config for defaults (from parameter or environment)
+        config = server_config or ServerConfig.from_env()
+
+        # Use explicit parameters if provided, otherwise fall back to config
+        self.base_url = base_url or config.compute_url
         self.timeout = timeout or ComputeClientConfig.DEFAULT_TIMEOUT
         self.auth = auth_provider or NoAuthProvider()
 
@@ -75,7 +93,10 @@ class ComputeClient:
         )
 
         # MQTT monitor for job status and worker capabilities
-        self._mqtt = MQTTJobMonitor(broker=mqtt_broker, port=mqtt_port)
+        # Use explicit parameters if provided, otherwise fall back to config
+        mqtt_broker_final = mqtt_broker or config.mqtt_broker
+        mqtt_port_final = mqtt_port or config.mqtt_port
+        self._mqtt = MQTTJobMonitor(broker=mqtt_broker_final, port=mqtt_port_final)
 
     # ============================================================================
     # Job Management (REST API)

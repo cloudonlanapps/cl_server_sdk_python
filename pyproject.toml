@@ -90,3 +90,10 @@ select = ["E", "F", "I", "W", "F811", "F401", "UP",
     "B018",  # useless expression
 ]
 ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+]

@@ -1,12 +1,12 @@
-# Python Client Library (`cl_client`) Implementation Plan
+# Python SDK (`pysdk`) Implementation Plan
 
 ## Overview
-Create a standalone Python client library package `cl_client` for the compute service, with comprehensive integration tests using pre-provided test media.
+Create a standalone Python SDK package `pysdk` for the compute service, with comprehensive integration tests using pre-provided test media.
 
 ## User Requirements Clarifications
 
 ### Phase 1 Requirements (Current)
-- **Package Location**: Separate package named `cl_client` (future-proof for other service clients)
+- **Package Location**: Separate package named `pysdk` (future-proof to support other service)
 - **Plugin Discovery**: Hardcode plugin schemas (9 plugins from cl_ml_tools) in config
 - **MQTT Integration**: Full job progress tracking + worker capabilities (primary workflow)
 - **Job Monitoring**: MQTT callback-based (primary), HTTP polling optional (secondary)
@@ -18,8 +18,45 @@ Create a standalone Python client library package `cl_client` for the compute se
 - **Documentation**: Follow PROJECT_STRUCTURE.md standard (README.md, INTERNALS.md, tests/README.md, tests/media/MEDIA_SETUP.md)
 - **Consistency**: Follow compute service's pyproject.toml structure/naming/order
 
-### Phase 2 Requirements (Future)
+### Phase 2 Requirements (In Progress)
 - **Authentication**: JWT token support with auth server integration
+- **SessionManager**: High-level auth facade matching Dart SDK
+- **Automatic Token Refresh**: Refresh when < 1 minute before expiry
+- **Test Parametrization**: Run all tests in both no-auth and JWT modes
+- **CLI Auth Support**: --username, --password, --no-auth flags
+- **Backward Compatibility**: No-auth remains default
+
+## Coding Guidelines
+
+### Pydantic-First Data Handling
+**CRITICAL**: Always use Pydantic for data validation and parsing. Avoid manual dictionary manipulation.
+
+**❌ AVOID - Manual dictionary parsing:**
+```python
+data_raw: object = response.json()
+if not isinstance(data_raw, dict):
+    raise ValueError(...)
+data = cast(dict[str, object], data_raw)
+return TokenResponse(**data)
+```
+
+**✅ PREFER - Pydantic validation:**
+```python
+return TokenResponse.model_validate(response.json())
+```
+
+**Benefits:**
+- Cleaner, more maintainable code
+- Better type safety (no Any types)
+- Automatic validation with clear error messages
+- Consistent with Pydantic best practices
+- Reduces boilerplate code
+
+**Application:**
+- Use `Model.model_validate(data)` for single objects
+- Use `Model.model_validate(item) for item in data` for lists
+- Let Pydantic handle type coercion and validation
+- Only use dictionaries for dynamic data that doesn't fit a schema
 
 ## Plan Revision Summary
 
@@ -109,7 +146,7 @@ This plan has been revised based on 16 critical requirements (8 initial + 8 refi
 
 16. **CLI Tool** ✅
     - Add command-line interface using the library
-    - Subcommands for each plugin (e.g., `cl_client image_conversion ...`)
+    - Subcommands for each plugin (e.g., `pysdk image_conversion ...`)
     - File download endpoint (to be implemented on server later)
 
 ### Major Architectural Decisions
@@ -124,15 +161,15 @@ This plan has been revised based on 16 critical requirements (8 initial + 8 refi
 
 ## Implementation Structure
 
-### Package Structure: `cl_client/`
+### Package Structure: `pysdk/`
 ```
-cl_client/
+pysdk/
 ├── pyproject.toml                # Package config (mirrors compute service structure)
 ├── pyrightconfig.json            # Basedpyright configuration (separate file)
 ├── README.md                     # User documentation
 ├── INTERNALS.md                  # Developer documentation
 ├── src/
-│   └── cl_client/
+│   └── pysdk/
 │       ├── __init__.py           # Public API exports
 │       ├── config.py             # Configuration class (all endpoints/hosts/ports)
 │       ├── compute_client.py     # Main client class
@@ -141,7 +178,7 @@ cl_client/
 │       ├── exceptions.py         # Custom exceptions
 │       ├── mqtt_monitor.py       # MQTT job/worker monitoring (subscription IDs)
 │       ├── cli.py                # CLI tool entry point
-│       └── plugins/              # Plugin-specific clients (completely modular)
+│       └── plugins/              # Plugin-specific SDK (completely modular)
 │           ├── __init__.py
 │           ├── base.py           # BasePluginClient (submit_job stub, submit_with_files implemented)
 │           ├── clip_embedding.py # Each plugin fully independent
@@ -180,9 +217,9 @@ cl_client/
         └── test_video_processing_workflow.py
 ```
 
-### External Test Media (NOT in git): `cl_client_test_media/`
+### External Test Media (NOT in git): `pysdk_test_media/`
 ```
-cl_client_test_media/              # Separate directory, user-provided
+pysdk_test_media/              # Separate directory, user-provided
 ├── images/
 │   ├── test_image_1920x1080.jpg  # Standard HD image
 │   ├── test_image_800x600.png    # Smaller image, PNG format
@@ -539,7 +576,7 @@ class MQTTJobMonitor:
 - Callback-based (non-blocking, async-compatible)
 - All configuration from `ComputeClientConfig`
 
-### 3. Plugin Clients (`plugins/*.py`)
+### 3. Plugin SDK (`plugins/*.py`)
 
 **Base Pattern:**
 ```python
@@ -917,8 +954,8 @@ def test_media_dir() -> Path:
     """Locate test media directory.
 
     Checks:
-    1. Environment variable: CL_CLIENT_TEST_MEDIA
-    2. Default: ../cl_client_test_media/
+    1. Environment variable: pysdk_TEST_MEDIA
+    2. Default: ../pysdk_test_media/
 
     Raises:
         FileNotFoundError: If media directory not found with helpful message
@@ -1186,22 +1223,22 @@ class TestImageProcessingWorkflow:
 # Test Media Setup Guide
 
 ## Overview
-Tests require pre-provided media files in `cl_client_test_media/` directory.
+Tests require pre-provided media files in `pysdk_test_media/` directory.
 This directory is **NOT in git** and must be set up separately.
 
 ## Quick Setup
 
 1. Create media directory:
    ```bash
-   mkdir -p cl_client_test_media/images
-   mkdir -p cl_client_test_media/videos
+   mkdir -p pysdk_test_media/images
+   mkdir -p pysdk_test_media/videos
    ```
 
 2. Set environment variable (optional):
    ```bash
-   export CL_CLIENT_TEST_MEDIA=/path/to/cl_client_test_media
+   export pysdk_TEST_MEDIA=/path/to/pysdk_test_media
    ```
-   Default: `../cl_client_test_media/` relative to test directory
+   Default: `../pysdk_test_media/` relative to test directory
 
 3. Provide test media files (see requirements below)
 
@@ -1301,10 +1338,10 @@ This test checks:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Client Library (Week 1)
+### Phase 1: Core SDK (Week 1)
 
 **Day 1: Project Setup & Configuration**
-- [ ] Create `cl_client/` package structure
+- [ ] Create `pysdk/` package structure
 - [ ] Set up `pyproject.toml` (mirror compute service structure)
   - [ ] Configure pytest, coverage, ruff (same as server)
   - [ ] Add CLI dependencies (click, rich)
@@ -1401,7 +1438,7 @@ This test checks:
   - [ ] Media file fixtures (test_image_hd, test_video_1080p, etc.)
   - [ ] `client()` - creates ComputeClient (no-auth mode)
   - [ ] **`validate_workers()` - FAILS if required capability missing**
-  - [ ] Environment variable handling (CL_CLIENT_TEST_MEDIA)
+  - [ ] Environment variable handling (pysdk_TEST_MEDIA)
 - [ ] Write `tests/media/MEDIA_SETUP.md` documentation
 - [ ] Create media validation tests
 - [ ] Run `uv run basedpyright` and `uv run pytest` to verify
@@ -1490,20 +1527,20 @@ This test checks:
 
 ### Overview
 
-The `cl_client` CLI tool provides a command-line interface to the compute service, built on top of the Python client library. It enables users to submit jobs, download results, and monitor progress from the terminal.
+The `pysdk` CLI tool provides a command-line interface to the compute service, built on top of the Python SDK. It enables users to submit jobs, download results, and monitor progress from the terminal.
 
 ### CLI Architecture (`cli.py`)
 
 ```python
-"""Command-line interface for cl_client.
+"""Command-line interface for pysdk.
 
 Usage:
-    cl_client <plugin> <subcommand> [options]
+    pysdk <plugin> <subcommand> [options]
 
 Examples:
-    cl_client clip_embedding embed photo.jpg
-    cl_client image_conversion convert input.png output.jpg --format jpeg
-    cl_client media_thumbnail generate video.mp4 thumb.jpg --width 256 --height 256
+    pysdk clip_embedding embed photo.jpg
+    pysdk image_conversion convert input.png output.jpg --format jpeg
+    pysdk media_thumbnail generate video.mp4 thumb.jpg --width 256 --height 256
 """
 
 import asyncio
@@ -1682,7 +1719,7 @@ if __name__ == "__main__":
 Add to `pyproject.toml`:
 ```toml
 [project.scripts]
-cl_client = "cl_client.cli:main"
+pysdk = "pysdk.cli:main"
 ```
 
 ### CLI Testing
@@ -1694,7 +1731,7 @@ Add `tests/test_client/test_cli.py`:
 import pytest
 from click.testing import CliRunner
 
-from cl_client.cli import cli
+from pysdk.cli import cli
 
 
 def test_cli_help():
@@ -1782,7 +1819,7 @@ Create `pyrightconfig.json` at package root:
 uv run basedpyright
 
 # Type check specific file
-uv run basedpyright src/cl_client/compute_client.py
+uv run basedpyright src/pysdk/compute_client.py
 
 # Type check with verbose output
 uv run basedpyright --verbose
@@ -2002,32 +2039,32 @@ def get_test_media_dir() -> Path:
     """Find test media directory.
 
     Priority:
-    1. CL_CLIENT_TEST_MEDIA env var
-    2. ../cl_client_test_media/ relative to test dir
+    1. pysdk_TEST_MEDIA env var
+    2. ../pysdk_test_media/ relative to test dir
 
     Raises:
         FileNotFoundError: With setup instructions
     """
     # Check env var
-    env_path = os.getenv("CL_CLIENT_TEST_MEDIA")
+    env_path = os.getenv("pysdk_TEST_MEDIA")
     if env_path:
         path = Path(env_path)
         if path.exists():
             return path
 
     # Check default location
-    default_path = Path(__file__).parent.parent.parent / "cl_client_test_media"
+    default_path = Path(__file__).parent.parent.parent / "pysdk_test_media"
     if default_path.exists():
         return default_path
 
     # Not found - helpful error
     raise FileNotFoundError(
         "Test media directory not found!\n"
-        "Please create and populate: cl_client_test_media/\n"
+        "Please create and populate: pysdk_test_media/\n"
         "See tests/MEDIA_SETUP.md for detailed setup instructions.\n\n"
         "Quick setup:\n"
-        "  1. mkdir -p cl_client_test_media/images\n"
-        "  2. mkdir -p cl_client_test_media/videos\n"
+        "  1. mkdir -p pysdk_test_media/images\n"
+        "  2. mkdir -p pysdk_test_media/videos\n"
         "  3. Add required media files (see MEDIA_SETUP.md)\n"
     )
 ```
@@ -2040,7 +2077,7 @@ def get_test_media_dir() -> Path:
 [project]
 name = "cl-client"
 version = "0.1.0"
-description = "Python client library for CL Server compute service"
+description = "Python SDK for CL Server compute service"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
@@ -2065,7 +2102,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cl_client = "cl_client.cli:main"  # CLI tool entry point
+pysdk = "pysdk.cli:main"  # CLI tool entry point
 
 [project.optional-dependencies]
 dev = [
@@ -2084,7 +2121,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cl_client"]
+packages = ["src/pysdk"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -2094,10 +2131,10 @@ asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
 ]
-addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fail-under=90"
+addopts = "--cov=pysdk --cov-report=html --cov-report=term-missing --cov-fail-under=90"
 
 [tool.coverage.run]
-source = ["src/cl_client"]
+source = ["src/pysdk"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -2135,7 +2172,7 @@ ignore = ["E501"]
 
 **Key Differences from Server:**
 - Package name: `cl-client` (not `compute`)
-- **HAS scripts**: CLI tool entry point (`cl_client = "cl_client.cli:main"`)
+- **HAS scripts**: CLI tool entry point (`pysdk = "pysdk.cli:main"`)
 - Added CLI dependencies: click, rich
 - Added pillow to dev dependencies (for test media validation)
 - basedpyright config in separate pyrightconfig.json (mirrors server pattern)
@@ -2148,7 +2185,7 @@ ignore = ["E501"]
 
 ## Success Criteria
 
-### Client Library (Phase 1)
+### SDK (Phase 1)
 - [ ] All 9 plugin clients implemented
 - [ ] Configuration class with all endpoints/hosts/ports (NO hardcoding)
 - [ ] No-auth mode working (JWT auth deferred to Phase 2)
@@ -2156,7 +2193,7 @@ ignore = ["E501"]
 - [ ] MQTT worker capability monitoring functional
 - [ ] Optional HTTP polling (secondary workflow)
 - [ ] Comprehensive error handling
-- [ ] 90%+ code coverage on client library
+- [ ] 90%+ code coverage on SDK
 - [ ] Full type hints on public APIs
 - [ ] **basedpyright strict mode passing (NO Any types, NO warnings/errors)**
 
@@ -2190,3 +2227,462 @@ From compute service (`/Users/anandasarangaram/Work/cl_server/services/compute/`
 - `src/compute/plugins.py` - Plugin registration pattern
 - `src/compute/capability_manager.py` - MQTT message format
 - `src/compute/auth.py` - JWT authentication mechanism
+
+---
+
+# Phase 2: Authentication Support (NEW)
+
+## Overview
+
+Add JWT-based authentication to the Python SDK, matching Dart SDK architecture while maintaining backward compatibility with no-auth mode.
+
+**Folder Structure Changed:**
+- CLI app moved to: `../../apps/cli_python`
+- Auth service location: `../../services/auth`
+- Dart SDK reference: `../../sdks/dartsdk`
+
+## Requirements
+
+### Core Features
+1. **Auth Service Integration**: Support all 9 auth endpoints
+2. **SessionManager**: High-level facade (matching Dart SDK)
+3. **Automatic Token Refresh**: Refresh when < 60 seconds before expiry (Dart SDK behavior)
+4. **Test Parametrization**: All tests run in both no-auth and JWT modes
+5. **CLI Authentication**: --username, --password, --no-auth flags
+6. **Backward Compatibility**: No-auth remains default
+
+### Architecture (Three-Layer Design - Matching Dart SDK)
+
+```
+SessionManager (High-Level Facade)
+  ├── login(), logout(), get_valid_token()
+  ├── Automatic token refresh (< 1 min)
+  └── create_compute_client() with auth
+       ↓
+AuthClient (Low-Level API Wrapper)
+  ├── POST /auth/token, /auth/token/refresh
+  ├── GET /auth/public-key, /users/me
+  └── User CRUD (admin endpoints)
+       ↓
+JWTAuthProvider (Enhanced)
+  ├── JWT token parsing for expiry
+  ├── Integrates with SessionManager
+  └── Authorization header injection
+```
+
+## Implementation Steps
+
+### Phase 2a: Core Auth Infrastructure (Week 1)
+
+#### Day 1: Auth Models & ServerConfig
+
+**New Files:**
+1. `src/cl_client/auth_models.py` - Auth request/response models
+   - TokenResponse (access_token, token_type)
+   - PublicKeyResponse (public_key, algorithm)
+   - UserResponse (id, username, is_admin, is_active, created_at, permissions)
+   - UserCreateRequest (username, password, is_admin, permissions)
+   - UserUpdateRequest (all fields optional for partial updates)
+
+2. `src/cl_client/server_config.py` - Centralized URL management
+   - ServerConfig dataclass with auth_url, compute_url, store_url (Phase 3)
+   - from_env() class method for environment variable loading
+   - Matches Dart SDK's ServerConfig pattern
+
+**Tests:**
+- `tests/test_client/test_auth_models.py`
+- `tests/test_client/test_server_config.py`
+
+#### Day 2-3: AuthClient
+
+**New File:** `src/cl_client/auth_client.py`
+
+**All 9 Endpoints:**
+1. `login(username, password) -> TokenResponse`
+2. `refresh_token(token) -> TokenResponse`
+3. `get_public_key() -> PublicKeyResponse`
+4. `get_current_user(token) -> UserResponse`
+5. `create_user(token, user_create) -> UserResponse` (admin)
+6. `list_users(token, skip, limit) -> list[UserResponse]` (admin)
+7. `get_user(token, user_id) -> UserResponse` (admin)
+8. `update_user(token, user_id, user_update) -> UserResponse` (admin)
+9. `delete_user(token, user_id) -> None` (admin)
+
+**Key Points:**
+- httpx.AsyncClient for HTTP
+- Strict type casting (no Any types)
+- Async context manager support
+- Direct endpoint wrappers (no state management)
+
+**Tests:** `tests/test_client/test_auth_client.py`
+
+#### Day 4: Enhanced JWTAuthProvider
+
+**Modify File:** `src/cl_client/auth.py`
+
+**Enhancements:**
+- Two modes: direct token OR SessionManager-based
+- JWT token parsing (base64 decode, no external dependencies)
+- Token expiry checking (_parse_token_expiry)
+- Auto-refresh logic (_should_refresh - < 60 sec threshold)
+- _get_token() method for SessionManager integration
+
+**Tests:** Update `tests/test_client/test_auth.py`
+
+#### Day 5: SessionManager
+
+**New File:** `src/cl_client/session_manager.py`
+
+**Core Methods:**
+- `login(username, password) -> TokenResponse`
+- `logout() -> None`
+- `is_authenticated() -> bool`
+- `get_current_user() -> UserResponse | None`
+- `get_valid_token() -> str` (with auto-refresh)
+- `create_compute_client() -> ComputeClient` (pre-configured auth)
+
+**Key Points:**
+- Matches Dart SDK SessionManager API
+- Automatic token refresh when < 60 seconds remaining
+- In-memory token storage (Phase 2)
+- Guest mode vs authenticated mode support
+
+**Tests:** `tests/test_client/test_session_manager.py`
+
+### Phase 2b: Integration (Week 2)
+
+#### Day 1: Update ComputeClient
+
+**Modify File:** `src/cl_client/compute_client.py`
+
+**Changes:**
+- Add `server_config: ServerConfig | None` parameter
+- Use config for all defaults (base_url, mqtt_broker, mqtt_port)
+- Backward compatible (all existing params work)
+
+**Tests:** Update `tests/test_client/test_compute_client.py`
+
+#### Day 2-3: Parametrize Tests
+
+**Modify File:** `tests/conftest.py`
+
+**Add Fixtures:**
+```python
+@pytest.fixture(params=["no_auth", "jwt"], scope="session")
+def auth_mode(request):
+    # Skip JWT if AUTH_DISABLED=true
+
+@pytest.fixture
+async def authenticated_session(auth_mode):
+    # Create SessionManager, login with test credentials
+    # Only for JWT mode
+
+@pytest.fixture
+async def client(auth_mode, authenticated_session):
+    # Return ComputeClient based on auth_mode
+```
+
+**Key Points:**
+- Automatic parametrization: tests run twice
+- Test credentials from environment (TEST_USERNAME, TEST_PASSWORD)
+- Mark admin-only tests: `@pytest.mark.admin_only`
+
+#### Day 4-5: Update CLI
+
+**Modify File:** `../../apps/cli_python/src/cl_client_cli/main.py`
+
+**Add Global Flags:**
+- `--username` (envvar: CL_USERNAME)
+- `--password` (envvar: CL_PASSWORD)
+- `--auth-url` (envvar: AUTH_URL, default: http://localhost:8000)
+- `--compute-url` (envvar: COMPUTE_URL, default: http://localhost:8002)
+- `--no-auth` (flag, default: False)
+
+**Helper Functions:**
+```python
+async def get_client(ctx) -> ComputeClient:
+    # If no_auth or no credentials: return ComputeClient()
+    # Else: create SessionManager, login, return client
+
+async def get_session_manager(ctx) -> SessionManager:
+    # Create and login SessionManager for auth operations
+    # Required for user management commands
+```
+
+**Plugin Command Updates:**
+- Add `--output` flag to ALL plugin commands (9 total)
+- Download output file to specified path when --output provided
+- Use client.download_job_file() after job completion
+
+**New User Management Commands** (matching Dart SDK):
+```python
+@cli.group()
+def user():
+    """User management commands (admin only)."""
+    pass
+
+@user.command()
+@click.argument("username")
+@click.option("--password", required=True, prompt=True, hide_input=True)
+@click.option("--admin", is_flag=True, default=False)
+@click.option("--permissions", multiple=True)
+async def create(username, password, admin, permissions):
+    """Create new user (admin only)."""
+
+@user.command()
+@click.option("--skip", default=0)
+@click.option("--limit", default=100)
+async def list(skip, limit):
+    """List all users (admin only)."""
+
+@user.command()
+@click.argument("user_id", type=int)
+async def get(user_id):
+    """Get user details (admin only)."""
+
+@user.command()
+@click.argument("user_id", type=int)
+@click.option("--password", prompt=True, hide_input=True, default=None)
+@click.option("--permissions", multiple=True, default=None)
+@click.option("--admin", type=bool, default=None)
+@click.option("--active", type=bool, default=None)
+async def update(user_id, password, permissions, admin, active):
+    """Update user (admin only)."""
+
+@user.command()
+@click.argument("user_id", type=int)
+@click.confirmation_option(prompt="Are you sure you want to delete this user?")
+async def delete(user_id):
+    """Delete user (admin only)."""
+```
+
+**Tests:** Update CLI tests
+- Test all plugin commands with --output flag
+- Test user management commands (with admin credentials)
+- Test permission errors for non-admin users
+
+### Phase 2c: Testing & Documentation (Week 3)
+
+#### Day 1-2: Integration Testing
+
+**Service Startup Order** (Critical):
+
+1. **Start Auth Service First**
+   ```bash
+   cd ../../services/auth
+   auth-server --port 8000
+   # Wait for startup, verify: curl http://localhost:8000/
+   ```
+
+2. **Restart Compute Service with Auth Enabled**
+   ```bash
+   cd ../../services/compute
+
+   # For AUTH MODE testing:
+   # Compute service needs to know auth service URL for token verification
+   export AUTH_SERVICE_URL=http://localhost:8000
+   export AUTH_ENABLED=true
+   compute-server --port 8002
+
+   # For NO-AUTH MODE testing:
+   # export AUTH_ENABLED=false
+   # compute-server --port 8002
+   ```
+
+3. **Start Workers** (after auth + compute services are running)
+   ```bash
+   cd ../../workers/ml_worker
+   # Workers will connect to compute service
+   # If auth enabled, workers may need credentials (check worker implementation)
+   python -m ml_worker --compute-url http://localhost:8002
+   ```
+
+4. **Create Test Users via Admin API**
+   ```bash
+   # Default admin user (created on auth service startup)
+   # Username: admin (from ADMIN_USERNAME env var)
+   # Password: admin (from ADMIN_PASSWORD env var)
+
+   # Create test user for integration tests
+   curl -X POST http://localhost:8000/users/ \
+     -H "Authorization: Bearer $(curl -X POST http://localhost:8000/auth/token \
+       -d username=admin -d password=admin | jq -r .access_token)" \
+     -F username=test_user \
+     -F password=test_pass \
+     -F is_admin=false
+   ```
+
+**Test Environment Variables:**
+```bash
+# Auth service
+export AUTH_SERVICE_URL=http://localhost:8000
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=admin
+
+# Compute service (when auth enabled)
+export AUTH_ENABLED=true
+
+# Python SDK tests
+export TEST_USERNAME=test_user
+export TEST_PASSWORD=test_pass
+export AUTH_DISABLED=false  # Enable JWT tests
+
+# Test credentials for admin operations
+export TEST_ADMIN_USERNAME=admin
+export TEST_ADMIN_PASSWORD=admin
+```
+
+**Test Scenarios:**
+1. Run all plugin tests in both auth modes
+2. Test token refresh (mock expiry)
+3. Test admin operations (user management with admin credentials)
+4. Test auth error handling (401, 403)
+5. Test CLI in both modes (no-auth and JWT)
+6. Test permission errors (non-admin user trying admin operations)
+
+**Test Execution:**
+```bash
+# Run all tests with AUTH DISABLED (no-auth mode only)
+export AUTH_DISABLED=true
+uv run pytest tests/ -v
+
+# Run all tests with AUTH ENABLED (both modes - parametrized)
+export AUTH_DISABLED=false
+uv run pytest tests/ -v
+
+# Run only auth-related tests
+uv run pytest tests/test_client/test_auth_client.py -v
+uv run pytest tests/test_client/test_session_manager.py -v
+```
+
+#### Day 3-4: Documentation
+
+**Update Files:**
+1. `README.md` - Add auth examples, SessionManager usage, CLI flags
+2. `INTERNALS.md` - Add SessionManager architecture, token refresh mechanism
+3. `tests/README.md` - Document auth test setup, environment variables
+
+**Key Sections:**
+- Quick Start (with and without auth)
+- SessionManager vs Direct Client
+- Token refresh behavior
+- CLI authentication
+- Troubleshooting (401, 403 errors)
+
+#### Day 5: Final QA
+
+**Quality Checks:**
+```bash
+uv run basedpyright                          # 0 errors expected
+uv run pytest tests/test_client -v           # All pass, >90% coverage
+AUTH_DISABLED=false uv run pytest -v         # Both auth modes
+uv run ruff check src/                       # Clean
+```
+
+## Success Criteria
+
+### Functional Requirements
+- [ ] All 9 auth endpoints implemented
+- [ ] SessionManager provides login/logout/refresh
+- [ ] Automatic token refresh (< 1 min threshold)
+- [ ] ComputeClient works in both auth modes
+- [ ] CLI supports auth flags
+- [ ] Backward compatible (no-auth default)
+
+### Testing Requirements
+- [ ] All tests parametrized (both modes)
+- [ ] Admin tests skip in no-auth mode
+- [ ] Integration tests pass with real auth service
+- [ ] >90% coverage maintained
+- [ ] basedpyright: 0 errors
+
+### Documentation Requirements
+- [ ] README updated with auth examples
+- [ ] Environment variables documented
+- [ ] Troubleshooting guide added
+- [ ] SessionManager architecture documented
+
+## Critical Files Summary
+
+### Files to Create (4 new files)
+1. `src/cl_client/auth_models.py` - Auth request/response models
+2. `src/cl_client/server_config.py` - Centralized URL config
+3. `src/cl_client/auth_client.py` - Low-level auth API wrapper
+4. `src/cl_client/session_manager.py` - High-level auth facade
+
+### Files to Modify (4 existing files)
+1. `src/cl_client/auth.py` - Enhance JWTAuthProvider
+2. `src/cl_client/compute_client.py` - Add server_config parameter
+3. `tests/conftest.py` - Add auth_mode parametrization
+4. `../../apps/cli_python/src/cl_client_cli/main.py` - Add auth flags
+
+### Files to Update (documentation)
+1. `README.md` - Add auth examples
+2. `INTERNALS.md` - Add architecture docs
+3. `tests/README.md` - Add auth test setup
+
+## Usage Examples
+
+### Library - No Auth (Backward Compatible)
+```python
+from cl_client import ComputeClient
+
+async with ComputeClient() as client:
+    job = await client.clip_embedding.embed_image(image=Path("photo.jpg"))
+```
+
+### Library - With Auth (New)
+```python
+from cl_client import SessionManager
+
+async with SessionManager() as session:
+    await session.login("user", "password")
+
+    client = session.create_compute_client()
+    job = await client.clip_embedding.embed_image(image=Path("photo.jpg"))
+```
+
+### CLI - No Auth
+```bash
+cl-client clip-embedding embed photo.jpg --no-auth
+```
+
+### CLI - With Auth
+```bash
+cl-client --username user --password pass clip-embedding embed photo.jpg
+
+# Or with environment variables
+export CL_USERNAME=user
+export CL_PASSWORD=pass
+cl-client clip-embedding embed photo.jpg
+```
+
+### CLI - Output File Downloads
+```bash
+# Download CLIP embedding to file
+cl-client clip-embedding embed photo.jpg --output embedding.npy
+
+# Download thumbnail with auth
+cl-client --username user --password pass \
+  media-thumbnail generate video.mp4 --output thumb.jpg --width 256 --height 256
+```
+
+### CLI - User Management (Admin Only)
+```bash
+# Create user
+cl-client --username admin --password admin123 \
+  user create newuser --password userpass --permissions read:jobs write:jobs
+
+# List users
+cl-client --username admin --password admin123 user list
+
+# Get user details
+cl-client --username admin --password admin123 user get 2
+
+# Update user
+cl-client --username admin --password admin123 \
+  user update 2 --admin true --permissions "*"
+
+# Delete user
+cl-client --username admin --password admin123 user delete 2
+```

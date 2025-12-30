@@ -1,13 +1,14 @@
 # Python Client Library (`cl_client`) - Implementation Tasks
 
 ## Progress Overview
-- **Phase**: ALL PHASES COMPLETE ✅
-- **Current Focus**: Production Ready - All Features Implemented and Tested
-- **Completed**: Phase 1 (Core Library), Phase 2 (Tests), Phase 3 (CLI Tool + Integration Testing)
+- **Phase**: PHASE 2 IN PROGRESS 🚧
+- **Current Focus**: Authentication Support Implementation
+- **Completed**: Phase 1 (Core Library + CLI Tool - No-auth mode)
+- **In Progress**: Phase 2 (Authentication Support - JWT + SessionManager)
 
 ---
 
-## 🎉 PROJECT COMPLETE
+## ✅ PHASE 1 COMPLETE
 
 ### Summary
 - ✅ **Core Library**: 9 plugins, MQTT monitoring, file downloads, strict type checking
@@ -16,6 +17,7 @@
 - ✅ **CLI Tests**: 21 tests, 80.48% coverage
 - ✅ **Integration Testing**: Live server testing with file verification
 - ✅ **Documentation**: README, test docs, verification reports
+- ✅ **Authentication**: No-auth mode working (Phase 1 requirement)
 
 ---
 
@@ -212,6 +214,289 @@
 - [x] example/tests/README.md - CLI test documentation
 - [x] CLI_TEST_RESULTS.md - Integration test report
 - [x] VERIFICATION_RESULTS.md - File verification results
+
+---
+
+## Phase 2: Authentication Support 🚧 IN PROGRESS
+
+### Overview
+- **Goal**: Add JWT authentication support to Python SDK
+- **Architecture**: Three-layer design matching Dart SDK
+- **Timeline**: 3 weeks (15 days)
+- **Status**: Planning Complete, Implementation Starting
+
+### Week 1: Core Auth Infrastructure
+
+#### Day 1: Auth Models & ServerConfig ✅ COMPLETE
+- [x] Create `src/cl_client/auth_models.py`
+  - [x] TokenResponse (access_token, token_type)
+  - [x] PublicKeyResponse (public_key, algorithm)
+  - [x] UserResponse (id, username, is_admin, is_active, created_at, permissions)
+  - [x] UserCreateRequest (username, password, is_admin, permissions)
+  - [x] UserUpdateRequest (all fields optional)
+- [x] Create `src/cl_client/server_config.py`
+  - [x] ServerConfig dataclass (auth_url, compute_url, store_url)
+  - [x] from_env() class method
+- [x] Create `tests/test_client/test_auth_models.py`
+  - [x] 18 tests for all models (TokenResponse, PublicKeyResponse, UserResponse, UserCreateRequest, UserUpdateRequest)
+  - [x] Tests for JSON serialization/deserialization
+  - [x] Tests for validation and defaults
+- [x] Create `tests/test_client/test_server_config.py`
+  - [x] 10 tests for ServerConfig
+  - [x] Tests for defaults, custom values, environment variables
+  - [x] Tests for from_env() method
+- [x] Run basedpyright (0 errors, 0 warnings) ✅
+- [x] Run pytest (28 tests passed) ✅
+
+#### Day 2-3: AuthClient ✅ COMPLETE
+- [x] Create `src/cl_client/auth_client.py` ✅
+  - [x] login(username, password) -> TokenResponse
+  - [x] refresh_token(token) -> TokenResponse
+  - [x] get_public_key() -> PublicKeyResponse
+  - [x] get_current_user(token) -> UserResponse
+  - [x] create_user(token, user_create) -> UserResponse (admin)
+  - [x] list_users(token, skip, limit) -> list[UserResponse] (admin)
+  - [x] get_user(token, user_id) -> UserResponse (admin)
+  - [x] update_user(token, user_id, user_update) -> UserResponse (admin)
+  - [x] delete_user(token, user_id) -> None (admin)
+  - [x] All 9 endpoints implemented with httpx.AsyncClient
+  - [x] Async context manager support
+  - [x] Comprehensive docstrings with examples
+  - [x] **Pydantic-first data handling** (model_validate instead of manual dict parsing)
+- [x] Create `tests/test_client/test_auth_client.py` ✅
+  - [x] 29 unit tests with mocked httpx (ALL PASSING)
+  - [x] Tests for all 9 endpoints
+  - [x] Tests for error handling (401, 403, 404, ValidationError)
+  - [x] Tests for async context manager
+  - [x] **100% coverage on auth_client.py**
+- [x] Run basedpyright (0 errors, 0 warnings) ✅
+
+#### Day 4: Enhanced JWTAuthProvider ✅ COMPLETE
+- [x] Modify `src/cl_client/auth.py` ✅
+  - [x] Add JWT token parsing (_parse_token_expiry)
+    - [x] Base64 decoding with automatic padding
+    - [x] JSON parsing with validation
+    - [x] Extract exp claim (Unix timestamp)
+    - [x] Convert to UTC datetime
+  - [x] Add token expiry checking (_should_refresh)
+    - [x] Check if < 60 seconds until expiry (matching Dart SDK)
+    - [x] Handle tokens without expiry
+    - [x] Handle invalid tokens gracefully
+  - [x] Support two modes: direct token OR SessionManager
+    - [x] Direct mode: static token string
+    - [x] SessionManager mode: token from session manager (ready for Day 5)
+  - [x] Add get_token() for SessionManager integration
+- [x] Update `tests/test_client/test_auth.py` ✅
+  - [x] **26 tests total (ALL PASSING)**
+  - [x] Test JWT parsing (8 tests)
+    - [x] Valid tokens with various expiry times
+    - [x] Invalid token formats
+    - [x] Invalid base64 encoding
+    - [x] Invalid JSON payloads
+    - [x] Non-dict payloads
+    - [x] Non-numeric exp claims
+    - [x] Base64 padding edge cases
+  - [x] Test expiry calculation (8 tests)
+    - [x] Expired tokens
+    - [x] Tokens expiring soon (< 60 sec)
+    - [x] Fresh tokens (> 60 sec)
+    - [x] Boundary conditions (exactly 60 sec)
+    - [x] Tokens without expiry
+    - [x] Invalid tokens
+    - [x] Float timestamps
+  - [x] Test initialization and get_headers (5 tests)
+  - [x] **94.64% coverage on auth.py**
+- [x] Run basedpyright ✅
+  - Note: SessionManager import errors expected (will be resolved in Day 5)
+
+#### Day 5: SessionManager ✅ COMPLETE
+- [x] Create `src/cl_client/session_manager.py` ✅
+  - [x] login(username, password) -> TokenResponse
+    - [x] Calls AuthClient.login()
+    - [x] Stores token in session
+    - [x] Fetches and caches user info
+  - [x] logout() -> None
+    - [x] Clears token and user info
+    - [x] No API calls (stateless JWTs)
+  - [x] is_authenticated() -> bool
+    - [x] Returns True if token exists
+  - [x] get_current_user() -> UserResponse | None
+    - [x] Returns cached user if available
+    - [x] Fetches from server if not cached
+    - [x] Returns None in guest mode
+  - [x] get_valid_token() -> str (with auto-refresh)
+    - [x] Checks if token needs refresh (< 60 sec)
+    - [x] Automatically refreshes if needed
+    - [x] Returns fresh token
+  - [x] get_token() -> str
+    - [x] Synchronous helper for JWTAuthProvider
+  - [x] create_compute_client() -> ComputeClient
+    - [x] JWT auth mode: Creates client with JWTAuthProvider + SessionManager
+    - [x] Guest mode: Creates client with NoAuthProvider
+    - [x] Uses ServerConfig for URLs and MQTT settings
+  - [x] Async context manager support
+- [x] Create `tests/test_client/test_session_manager.py` ✅
+  - [x] **20 tests total (ALL PASSING)**
+  - [x] Test initialization (2 tests)
+  - [x] Test login/logout lifecycle (4 tests)
+    - [x] Successful login
+    - [x] Invalid credentials
+    - [x] Logout clears state
+    - [x] is_authenticated() status
+  - [x] Test user info (3 tests)
+    - [x] Cached user
+    - [x] Fetch from server
+    - [x] Guest mode
+  - [x] Test token management (4 tests)
+    - [x] get_token() authenticated
+    - [x] get_token() not authenticated
+    - [x] get_valid_token() fresh token
+    - [x] get_valid_token() with refresh
+  - [x] Test ComputeClient factory (3 tests)
+    - [x] Authenticated mode
+    - [x] Guest mode
+    - [x] Uses ServerConfig
+  - [x] Test context manager (2 tests)
+  - [x] Test full integration workflow (1 test)
+  - [x] **100% coverage on session_manager.py**
+- [x] Run basedpyright (0 errors, 0 warnings) ✅
+
+### Week 2: Integration
+
+#### Day 1: Update ComputeClient
+- [ ] Modify `src/cl_client/compute_client.py`
+  - [ ] Add server_config parameter
+  - [ ] Use config for all defaults
+- [ ] Update `tests/test_client/test_compute_client.py`
+  - [ ] Test with server_config
+  - [ ] Test backward compatibility
+- [ ] Run basedpyright (0 errors expected)
+
+#### Day 2-3: Parametrize Tests
+- [ ] Modify `tests/conftest.py`
+  - [ ] Add auth_mode fixture (params=["no_auth", "jwt"])
+  - [ ] Add authenticated_session fixture
+  - [ ] Update client fixture for both modes
+- [ ] Update existing tests
+  - [ ] Add @pytest.mark.admin_only to admin tests
+  - [ ] Verify all tests run in both modes
+- [ ] Run full test suite in both modes
+- [ ] Maintain >90% coverage
+
+#### Day 4-5: Update CLI
+- [ ] Modify `../../apps/cli_python/src/cl_client_cli/main.py`
+  - [ ] Add global flags (--username, --password, --no-auth, --auth-url, --compute-url)
+  - [ ] Add get_client() helper function
+  - [ ] Add get_session_manager() helper function (for user management)
+  - [ ] **Add --output flag to ALL 9 plugin commands for file download**
+  - [ ] Update all plugin commands to support auth
+  - [ ] **Add user management command group (matching Dart SDK)**
+    - [ ] user create (username, password, admin flag, permissions)
+    - [ ] user list (skip, limit pagination)
+    - [ ] user get (user_id)
+    - [ ] user update (user_id, password, permissions, admin, active)
+    - [ ] user delete (user_id with confirmation)
+- [ ] Update CLI tests
+  - [ ] Test with --no-auth
+  - [ ] Test with --username/--password
+  - [ ] Test environment variables
+  - [ ] **Test --output flag on all plugin commands**
+  - [ ] **Test user management commands (admin credentials required)**
+  - [ ] Test permission errors for non-admin users
+- [ ] Run CLI tests (all passing)
+
+### Week 3: Testing & Documentation
+
+#### Day 1-2: Integration Testing
+- [ ] Set up test environment (SERVICE STARTUP ORDER - CRITICAL)
+  - [ ] **Step 1: Start auth service first**
+    - [ ] `cd ../../services/auth`
+    - [ ] `auth-server --port 8000`
+    - [ ] Verify: `curl http://localhost:8000/`
+  - [ ] **Step 2: Restart compute service with auth enabled**
+    - [ ] `cd ../../services/compute`
+    - [ ] Set env vars: `AUTH_SERVICE_URL=http://localhost:8000`, `AUTH_ENABLED=true`
+    - [ ] `compute-server --port 8002`
+    - [ ] Verify: `curl http://localhost:8002/capabilities`
+  - [ ] **Step 3: Start workers** (after auth + compute running)
+    - [ ] `cd ../../workers/ml_worker`
+    - [ ] `python -m ml_worker --compute-url http://localhost:8002`
+    - [ ] Verify workers registered via MQTT
+  - [ ] **Step 4: Create test users via admin API**
+    - [ ] Get admin token
+    - [ ] Create test_user (username: test_user, password: test_pass)
+    - [ ] Set TEST_USERNAME, TEST_PASSWORD, TEST_ADMIN_USERNAME, TEST_ADMIN_PASSWORD env vars
+- [ ] Run integration tests
+  - [ ] All plugin tests in both auth modes
+  - [ ] Token refresh tests (mock expiry)
+  - [ ] Admin operations tests (user CRUD with admin credentials)
+  - [ ] Auth error handling (401, 403)
+  - [ ] Permission errors (non-admin trying admin operations)
+  - [ ] CLI tests in both modes
+  - [ ] CLI user management commands
+- [ ] Test both configurations
+  - [ ] AUTH_DISABLED=true (no-auth mode only)
+  - [ ] AUTH_DISABLED=false (both modes parametrized)
+- [ ] Verify success criteria
+  - [ ] >90% coverage maintained
+  - [ ] basedpyright: 0 errors
+  - [ ] All tests pass in both modes
+
+#### Day 3-4: Documentation
+- [ ] Update `README.md`
+  - [ ] Add SessionManager examples
+  - [ ] Add auth usage examples
+  - [ ] Document CLI auth flags
+  - [ ] Add environment variables section
+- [ ] Update `INTERNALS.md`
+  - [ ] Add SessionManager architecture
+  - [ ] Document token refresh mechanism
+  - [ ] Add auth troubleshooting section
+- [ ] Update `tests/README.md`
+  - [ ] Document auth test setup
+  - [ ] Document environment variables
+  - [ ] Document parametrized test approach
+
+#### Day 5: Final QA
+- [ ] Run all quality checks
+  - [ ] basedpyright (0 errors, 0 warnings)
+  - [ ] pytest tests/test_client (>90% coverage)
+  - [ ] pytest with AUTH_DISABLED=false (both modes)
+  - [ ] ruff check src/ (clean)
+- [ ] Manual testing
+  - [ ] CLI no-auth mode
+  - [ ] CLI with auth
+  - [ ] Library no-auth mode
+  - [ ] Library with SessionManager
+- [ ] Final verification
+  - [ ] All success criteria met
+  - [ ] Documentation complete
+  - [ ] Ready for production
+
+### Success Criteria
+
+#### Functional Requirements
+- [ ] All 9 auth endpoints implemented
+- [ ] SessionManager provides login/logout/refresh
+- [ ] Automatic token refresh (< 1 min threshold)
+- [ ] ComputeClient works in both auth modes
+- [ ] CLI supports auth flags (--username, --password, --no-auth)
+- [ ] **CLI supports --output for file downloads (all 9 plugin commands)**
+- [ ] **CLI supports user management commands (create, list, get, update, delete)**
+- [ ] Backward compatible (no-auth default)
+
+#### Testing Requirements
+- [ ] All tests parametrized (both modes)
+- [ ] Admin tests skip in no-auth mode
+- [ ] Integration tests pass with real auth service
+- [ ] >90% coverage maintained
+- [ ] basedpyright: 0 errors
+
+#### Documentation Requirements
+- [ ] README updated with auth examples
+- [ ] Environment variables documented
+- [ ] Troubleshooting guide added
+- [ ] SessionManager architecture documented
 
 ---
 
