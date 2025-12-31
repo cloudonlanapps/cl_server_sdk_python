@@ -29,7 +29,7 @@ uv sync
 
 ## Quick Start
 
-### Basic Usage (MQTT Callbacks - Primary Workflow)
+### No-Auth Mode (Default)
 
 ```python
 import asyncio
@@ -37,7 +37,7 @@ from pathlib import Path
 from cl_client import ComputeClient
 
 async def main():
-    # Create client (connects to localhost by default)
+    # Create client (connects to localhost by default, no auth)
     async with ComputeClient() as client:
         # Define callback for job completion
         def on_complete(job):
@@ -57,6 +57,33 @@ async def main():
 
         # Keep running to receive callbacks
         await asyncio.sleep(10)
+
+asyncio.run(main())
+```
+
+### JWT Auth Mode
+
+```python
+import asyncio
+from pathlib import Path
+from cl_client import SessionManager
+
+async def main():
+    # Create session manager and login
+    async with SessionManager() as session:
+        await session.login("username", "password")
+
+        # Create authenticated client
+        client = session.create_compute_client()
+
+        # Use client as normal
+        job = await client.clip_embedding.embed_image(
+            image=Path("photo.jpg"),
+            wait=True
+        )
+
+        print(f"Job {job.job_id} completed!")
+        print(f"Embedding dimension: {job.task_output['embedding_dim']}")
 
 asyncio.run(main())
 ```
@@ -101,6 +128,115 @@ async def main():
         print(f"Downloaded to embedding.npy")
 
 asyncio.run(main())
+```
+
+## Authentication
+
+The library supports two authentication modes:
+
+### 1. No-Auth Mode (Default)
+
+No authentication required. Suitable for internal networks or development.
+
+```python
+from cl_client import ComputeClient
+
+# Direct client usage - no auth
+async with ComputeClient() as client:
+    job = await client.clip_embedding.embed_image(image=Path("photo.jpg"))
+```
+
+### 2. JWT Auth Mode
+
+Full JWT authentication with automatic token refresh.
+
+```python
+from cl_client import SessionManager
+
+# High-level session management
+async with SessionManager() as session:
+    # Login with credentials
+    await session.login("username", "password")
+
+    # Check authentication status
+    if session.is_authenticated():
+        print("Logged in successfully!")
+
+    # Get current user info
+    user = await session.get_current_user()
+    print(f"User: {user.username}, Admin: {user.is_admin}")
+
+    # Create authenticated client (automatically includes auth headers)
+    client = session.create_compute_client()
+
+    # Use client normally - auth headers added automatically
+    job = await client.clip_embedding.embed_image(image=Path("photo.jpg"))
+
+    # Logout when done
+    await session.logout()
+```
+
+### Token Refresh
+
+SessionManager automatically refreshes tokens when they're about to expire (< 60 seconds remaining):
+
+```python
+async with SessionManager() as session:
+    await session.login("username", "password")
+
+    # Token automatically refreshed if needed
+    token = await session.get_valid_token()
+
+    # Use client - token refresh happens transparently
+    client = session.create_compute_client()
+    job = await client.clip_embedding.embed_image(image=Path("photo.jpg"))
+```
+
+### User Management (Admin Only)
+
+Admin users can manage other users via SessionManager:
+
+```python
+from cl_client import SessionManager
+from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
+
+async with SessionManager() as session:
+    await session.login("admin", "admin_password")
+
+    # Create new user
+    user_create = UserCreateRequest(
+        username="newuser",
+        password="securepass",
+        is_admin=False,
+        permissions=["read:jobs", "write:jobs"]
+    )
+    user = await session._auth_client.create_user(
+        token=session.get_token(),
+        user_create=user_create
+    )
+
+    # List all users
+    users = await session._auth_client.list_users(
+        token=session.get_token(),
+        skip=0,
+        limit=10
+    )
+
+    # Update user permissions
+    user_update = UserUpdateRequest(
+        permissions=["read:jobs", "write:jobs", "admin"]
+    )
+    updated = await session._auth_client.update_user(
+        token=session.get_token(),
+        user_id=user.id,
+        user_update=user_update
+    )
+
+    # Delete user
+    await session._auth_client.delete_user(
+        token=session.get_token(),
+        user_id=user.id
+    )
 ```
 
 ## Available Plugins
@@ -198,19 +334,43 @@ job = await client.media_thumbnail.generate(
 ### Environment Variables
 
 ```bash
-# Server connection
-export COMPUTE_SERVER_URL="http://localhost:8002"
+# Server URLs
+export AUTH_URL="http://localhost:8000"          # Auth service URL
+export COMPUTE_URL="http://localhost:8002"       # Compute service URL
+export STORE_URL="http://localhost:8001"         # Store service URL (future)
 
 # MQTT broker
 export MQTT_BROKER_HOST="localhost"
 export MQTT_BROKER_PORT="1883"
+
+# Authentication (for testing)
+export TEST_USERNAME="testuser"                  # Test user credentials
+export TEST_PASSWORD="testpass"
+export TEST_ADMIN_USERNAME="admin"               # Admin credentials
+export TEST_ADMIN_PASSWORD="admin"
 ```
 
 ### Programmatic Configuration
 
 ```python
-from cl_client import ComputeClient
+from cl_client import ComputeClient, SessionManager
+from cl_client.server_config import ServerConfig
 
+# Using ServerConfig (recommended for auth mode)
+config = ServerConfig(
+    auth_url="http://localhost:8000",
+    compute_url="http://localhost:8002",
+    mqtt_broker="localhost",
+    mqtt_port=1883
+)
+
+# SessionManager uses ServerConfig automatically
+session = SessionManager(server_config=config)
+
+# Or load from environment
+session = SessionManager(server_config=ServerConfig.from_env())
+
+# Direct client configuration (no-auth mode)
 client = ComputeClient(
     base_url="http://localhost:8002",
     mqtt_broker="localhost",
@@ -272,11 +432,20 @@ available = await client.wait_for_workers(
 ### Custom Authentication
 
 ```python
-from cl_client.auth import JWTAuthProvider
+from cl_client.auth import JWTAuthProvider, NoAuthProvider
+from cl_client import SessionManager
 
-# JWT authentication (Phase 2 - requires auth server)
+# Option 1: Use SessionManager (recommended - handles token refresh)
+session = SessionManager()
+await session.login("username", "password")
+client = session.create_compute_client()
+
+# Option 2: Direct JWT provider (no automatic refresh)
 auth_provider = JWTAuthProvider(token="your-jwt-token")
 client = ComputeClient(auth_provider=auth_provider)
+
+# Option 3: Explicit no-auth mode
+client = ComputeClient(auth_provider=NoAuthProvider())
 ```
 
 ## Error Handling
@@ -287,12 +456,25 @@ from cl_client.exceptions import (
     JobFailedError,
     WorkerUnavailableError
 )
+import httpx
 
 try:
-    job = await client.clip_embedding.embed_image(
-        image=Path("photo.jpg"),
-        wait=True
-    )
+    # With SessionManager
+    async with SessionManager() as session:
+        await session.login("username", "password")
+        client = session.create_compute_client()
+
+        job = await client.clip_embedding.embed_image(
+            image=Path("photo.jpg"),
+            wait=True
+        )
+except httpx.HTTPStatusError as e:
+    if e.response.status_code == 401:
+        print("Authentication failed - invalid credentials or token expired")
+    elif e.response.status_code == 403:
+        print("Forbidden - insufficient permissions")
+    else:
+        print(f"HTTP error: {e.response.status_code}")
 except JobNotFoundError:
     print("Job not found")
 except JobFailedError as e:

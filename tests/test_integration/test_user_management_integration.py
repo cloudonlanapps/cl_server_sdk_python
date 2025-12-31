@@ -7,29 +7,41 @@ These tests verify admin user CRUD operations:
 - Update user
 - Delete user
 
-NOTE: These tests ONLY run in JWT mode since they test admin operations.
-They are automatically skipped in no-auth mode.
+NOTE: These tests test admin operations. They run in all auth modes but expect
+different outcomes based on whether the user has admin permissions:
+- Admin mode: Operations succeed
+- Non-admin modes: Operations fail with 403 Forbidden
+- No-auth mode: Tests are skipped
 """
 
+from typing import Any
+
+import httpx
 import pytest
+from cl_client import ServerConfig
 from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
 from cl_client.session_manager import SessionManager
+
+from conftest import get_expected_error, should_succeed
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_create_user_success(auth_mode: str):
-    """Test admin can create a new user."""
-    if auth_mode == "no_auth":
-        pytest.skip("Test only applies to JWT auth mode")
-
-    # Login as admin
-    admin_session = SessionManager()
-    await admin_session.login("admin", "admin")
+async def test_create_user_success(auth_config: dict[str, Any]):
+    """Test that create_user succeeds for admin, fails for non-admin."""
+    # Create session with credentials from auth_config
+    config = ServerConfig(
+        auth_url=str(auth_config["auth_url"]),
+        compute_url=str(auth_config["compute_url"]),
+    )
+    session = SessionManager(server_config=config)
+    await session.login(
+        str(auth_config["username"]),
+        str(auth_config["password"]),
+    )
 
     try:
-        # Create new user
         user_create = UserCreateRequest(
             username="test_new_user",
             password="password123",
@@ -38,26 +50,37 @@ async def test_create_user_success(auth_mode: str):
             permissions=["read:jobs"],
         )
 
-        user = await admin_session._auth_client.create_user(  # type: ignore[attr-defined]
-            token=admin_session.get_token(),
-            user_create=user_create,
-        )
+        if should_succeed(auth_config, operation_type="admin"):
+            # Should succeed - admin user
+            user = await session._auth_client.create_user(  # type: ignore[attr-defined]
+                token=session.get_token(),
+                user_create=user_create,
+            )
 
-        # Verify user created
-        assert user.username == "test_new_user"
-        assert user.is_admin is False
-        assert user.is_active is True
-        assert user.permissions == ["read:jobs"]
-        assert user.id is not None
+            # Verify user created
+            assert user.username == "test_new_user"
+            assert user.is_admin is False
+            assert user.is_active is True
+            assert user.permissions == ["read:jobs"]
+            assert user.id is not None
 
-        # Cleanup
-        await admin_session._auth_client.delete_user(  # type: ignore[attr-defined]
-            token=admin_session.get_token(),
-            user_id=user.id,
-        )
+            # Cleanup
+            await session._auth_client.delete_user(  # type: ignore[attr-defined]
+                token=session.get_token(),
+                user_id=user.id,
+            )
+        else:
+            # Should fail - non-admin user
+            expected_code = get_expected_error(auth_config, operation_type="admin")
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                await session._auth_client.create_user(  # type: ignore[attr-defined]
+                    token=session.get_token(),
+                    user_create=user_create,
+                )
+            assert exc_info.value.response.status_code == expected_code
 
     finally:
-        await admin_session.close()
+        await session.close()
 
 
 @pytest.mark.integration

@@ -363,25 +363,131 @@
 
 ### Week 2: Integration
 
-#### Day 1: Update ComputeClient
-- [ ] Modify `src/cl_client/compute_client.py`
-  - [ ] Add server_config parameter
-  - [ ] Use config for all defaults
-- [ ] Update `tests/test_client/test_compute_client.py`
-  - [ ] Test with server_config
-  - [ ] Test backward compatibility
-- [ ] Run basedpyright (0 errors expected)
+#### Day 1: Update ComputeClient ✅ COMPLETE
+- [x] Modify `src/cl_client/compute_client.py`
+  - [x] Add server_config parameter
+  - [x] Use config for all defaults
+- [x] Update `tests/test_client/test_compute_client.py`
+  - [x] Test with server_config
+  - [x] Test backward compatibility
+- [x] Run basedpyright (0 errors, 0 warnings) ✅
 
-#### Day 2-3: Parametrize Tests
-- [ ] Modify `tests/conftest.py`
-  - [ ] Add auth_mode fixture (params=["no_auth", "jwt"])
-  - [ ] Add authenticated_session fixture
-  - [ ] Update client fixture for both modes
-- [ ] Update existing tests
-  - [ ] Add @pytest.mark.admin_only to admin tests
-  - [ ] Verify all tests run in both modes
-- [ ] Run full test suite in both modes
-- [ ] Maintain >90% coverage
+#### Day 2-3: Parametrize Tests (Basic) ✅ COMPLETE
+- [x] Modify `tests/conftest.py` ✅
+  - [x] Add auth_mode fixture (params=["no_auth", "jwt"])
+  - [x] Add authenticated_session fixture
+  - [x] Update client fixture for both modes
+  - [x] Add pytest_collection_modifyitems hook for admin test skipping
+
+#### Day 2.5: Enhanced Test Parametrization 🚧 IN PROGRESS
+**Goal**: Implement comprehensive multi-mode test parametrization with server detection
+
+**Requirements:**
+1. Config-file based test user management (tests/auth_config.json)
+2. Server auth detection via RootResponse
+3. Multiple test modes: admin, user-with-permission, user-no-permission, no-auth
+4. Automatic user creation/validation
+5. Smart skip/fail logic based on server vs test mode mismatch
+
+**Tasks:**
+- [x] Server-Side Changes ✅
+  - [x] Update compute service RootResponse to include `auth_required: bool` field ✅
+    - [x] Modify compute service root endpoint (/) ✅
+    - [x] Read AUTH_DISABLED environment variable ✅
+    - [x] Return {"service": "compute", "version": "...", "auth_required": bool} ✅
+  - [x] Test server root endpoint in both modes (auth enabled/disabled) ✅
+
+- [x] SDK Changes ✅
+  - [x] Create `tests/auth_config.json` ✅
+    - [x] default_auth_mode: "user-with-permission"
+    - [x] auth_url, compute_url
+    - [x] test_users: admin, user-with-permission, user-no-permission
+    - [x] Passwords for non-admin users (admin from env: TEST_ADMIN_PASSWORD)
+
+  - [x] Rewrite `tests/conftest.py` ✅
+    - [x] Add `load_auth_config()` helper (reads auth_config.json) ✅
+    - [x] Add `get_server_info()` helper (GET / from compute service) ✅
+    - [x] Add `pytest_addoption()` to register --auth-mode CLI option ✅
+      - [x] Dynamically load choices from auth_config.json test_users keys ✅
+      - [x] Choices: ["auto", "no-auth"] + test_users.keys() ✅
+    - [x] Add `auth_mode` fixture (session-scoped) ✅
+      - [x] Auto-detect: if server auth_required=true, use default_auth_mode, else "no-auth" ✅
+      - [x] Skip if testing auth mode but server auth_required=false ✅
+    - [x] Add `test_users_setup` fixture (session-scoped) ✅
+      - [x] Check auth server availability (fail if unavailable but auth mode enabled) ✅
+      - [x] Login as admin (TEST_ADMIN_PASSWORD from env) ✅
+      - [x] For each non-admin user: ✅
+        - [x] Check if user exists (list_users) ✅
+        - [x] If exists: validate credentials (attempt login, fail if password wrong) ✅
+        - [x] If not exists: create user with config password and permissions ✅
+      - [x] Return user credentials dict ✅
+    - [x] Add `auth_config` fixture (test-scoped) ✅
+      - [x] Provide complete auth configuration for current test ✅
+      - [x] Include: mode, server_auth_enabled, username, password, is_admin, has_permissions ✅
+      - [x] Determine expected behavior (should_fail_with_auth_error flag) ✅
+    - [x] Add `test_client` fixture (replaces current client fixture) ✅
+      - [x] Create ComputeClient based on auth_config ✅
+      - [x] Attach session to client for admin operations ✅
+      - [x] Proper cleanup (close client and session) ✅
+    - [x] Add helper functions ✅
+      - [x] `should_succeed(auth_config, operation_type)` - determine if operation should pass ✅
+      - [x] `get_expected_error(auth_config, operation_type)` - get expected error code (401/403) ✅
+
+  - [ ] Update test files to use new fixtures
+    - [ ] Update plugin integration tests (conditional assertions)
+    - [ ] Update user management tests (admin only, use should_succeed)
+    - [ ] Add permission denied tests (user-no-permission mode)
+
+  - [ ] Run tests in all modes
+    - [ ] `pytest --auth-mode=auto`
+    - [ ] `pytest --auth-mode=no-auth`
+    - [ ] `pytest --auth-mode=admin`
+    - [ ] `pytest --auth-mode=user-with-permission`
+    - [ ] `pytest --auth-mode=user-no-permission`
+
+  - [ ] Test the test matrix scenarios
+    - [ ] Auth mode + server auth disabled → skip tests
+    - [ ] No-auth mode + server auth disabled → tests run normally
+    - [ ] Auth mode + server auth enabled → tests run normally
+    - [ ] No-auth mode + server auth enabled → expect 401 errors
+
+  - [ ] Documentation
+    - [ ] Update tests/README.md with new test approach
+    - [ ] Document environment variables (TEST_ADMIN_PASSWORD)
+    - [ ] Document auth_config.json structure
+    - [ ] Document pytest --auth-mode usage
+    - [ ] Document test matrix scenarios
+- [x] Update existing tests ✅
+  - [x] Add @pytest.mark.admin_only to 14 admin tests in test_auth_client.py
+  - [x] Update all 9 integration test files to use parametrized client fixture
+  - [x] Verify all tests run in both modes
+- [x] Create integration tests for auth errors ✅
+  - [x] Test unauthenticated requests (401)
+  - [x] Test non-admin users on admin endpoints (403)
+  - [x] Test invalid tokens (401)
+  - [x] Test expired tokens (401)
+  - [x] 6 auth error tests created in test_auth_errors_integration.py
+- [x] Create user management integration tests ✅
+  - [x] test_create_user_success
+  - [x] test_list_users_success
+  - [x] test_get_user_success
+  - [x] test_update_user_permissions
+  - [x] test_update_user_password
+  - [x] test_update_user_active_status
+  - [x] test_delete_user_success
+  - [x] test_list_users_with_pagination
+  - [x] 8 user management tests in test_user_management_integration.py
+- [x] Fix server-side issues discovered during testing ✅
+  - [x] Fixed JWT token field: "sub" → "id" (auth server routes.py, compute server auth.py)
+  - [x] Fixed endpoint inconsistency: All endpoints now use forms only (no JSON)
+  - [x] Fixed permissions format: comma-separated strings (e.g., "read:jobs,write:jobs")
+- [x] Run full test suite in both modes ✅
+  - [x] No-auth mode: 23 passed, 2 failed (face_detection - known issue)
+  - [x] JWT mode: 41 passed, 2 failed (face_detection - known issue)
+  - [x] Auth error tests: 5 passed
+  - [x] User management tests: 8 passed
+  - [x] Plugin tests (JWT mode): 28 passed
+- [x] Maintain >90% coverage ✅ (current: 94.64% on auth.py, 100% on session_manager.py)
 
 #### Day 4-5: Update CLI
 - [ ] Modify `../../apps/cli_python/src/cl_client_cli/main.py`

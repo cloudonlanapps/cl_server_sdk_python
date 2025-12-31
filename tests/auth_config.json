@@ -1,0 +1,24 @@
+{
+  "default_auth_mode": "user-with-permission",
+  "auth_url": "http://localhost:8000",
+  "compute_url": "http://localhost:8002",
+  "test_users": {
+    "admin": {
+      "username": "admin",
+      "is_admin": true,
+      "permissions": []
+    },
+    "user-with-permission": {
+      "username": "test_user_perm",
+      "password": "user123",
+      "is_admin": false,
+      "permissions": ["ai_inference_support"]
+    },
+    "user-no-permission": {
+      "username": "test_user_noperm",
+      "password": "user456",
+      "is_admin": false,
+      "permissions": []
+    }
+  }
+}

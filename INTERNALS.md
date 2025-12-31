@@ -90,12 +90,19 @@ Auth providers are injectable and swappable:
 
 ```python
 from cl_client.auth import NoAuthProvider, JWTAuthProvider
+from cl_client import SessionManager
 
 # No-auth mode (default)
 client = ComputeClient(auth_provider=NoAuthProvider())
 
-# JWT mode (Phase 2)
-client = ComputeClient(auth_provider=JWTAuthProvider(token="..."))
+# JWT mode with SessionManager (recommended)
+session = SessionManager()
+await session.login("username", "password")
+client = session.create_compute_client()
+
+# JWT mode with direct provider (no automatic refresh)
+auth_provider = JWTAuthProvider(token="your-jwt-token")
+client = ComputeClient(auth_provider=auth_provider)
 ```
 
 **Implementation:**
@@ -103,6 +110,143 @@ client = ComputeClient(auth_provider=JWTAuthProvider(token="..."))
 - Each provider implements `get_headers()` method
 - Injected via constructor for easy testing
 - Future providers can be added without modifying core client
+
+### Three-Layer Authentication Architecture
+
+The authentication system follows a three-layer design pattern matching the Dart SDK:
+
+```
+┌─────────────────────────────────────────────┐
+│         SessionManager (High-Level)         │
+│  - login(), logout(), is_authenticated()    │
+│  - Automatic token refresh (< 60 sec)       │
+│  - create_compute_client() factory          │
+└──────────────────┬──────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────┐
+│         AuthClient (Low-Level API)          │
+│  - POST /auth/token (login)                 │
+│  - POST /auth/token/refresh                 │
+│  - GET /auth/public-key                     │
+│  - GET /users/me                            │
+│  - User CRUD (admin endpoints)              │
+└──────────────────┬──────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────┐
+│      JWTAuthProvider (Header Injection)     │
+│  - JWT token parsing for expiry             │
+│  - Authorization header injection           │
+│  - Integrates with SessionManager           │
+└─────────────────────────────────────────────┘
+```
+
+**Layer Responsibilities:**
+
+1. **SessionManager (High-Level)**: User-facing API for authentication lifecycle
+   - Manages login/logout workflow
+   - Stores token and user info in memory
+   - Automatic token refresh when < 60 seconds until expiry
+   - Creates pre-configured ComputeClient instances
+
+2. **AuthClient (Low-Level)**: Direct wrappers for auth service REST API
+   - All 9 auth endpoints (token, user management)
+   - Async httpx client for HTTP requests
+   - Pydantic model parsing
+   - No state management (stateless)
+
+3. **JWTAuthProvider (Integration)**: Bridges auth and compute clients
+   - Parses JWT tokens to extract expiry
+   - Injects Authorization headers into requests
+   - Can integrate with SessionManager for auto-refresh
+
+**Benefits:**
+- Clear separation of concerns
+- Easy to test each layer independently
+- SessionManager provides simple high-level API
+- AuthClient can be used directly for custom workflows
+- Future auth methods (OAuth, API keys) can be added without affecting existing code
+
+### Token Refresh Mechanism
+
+SessionManager automatically refreshes JWT tokens before they expire:
+
+```python
+async def get_valid_token(self) -> str:
+    """Get a valid token, refreshing if needed."""
+    if not self._token:
+        raise ValueError("Not authenticated")
+
+    # Parse token to check expiry
+    expiry = self._auth_provider._parse_token_expiry(self._token)
+    if expiry:
+        time_until_expiry = (expiry - datetime.now(timezone.utc)).total_seconds()
+
+        # Refresh if < 60 seconds remaining
+        if time_until_expiry < 60:
+            response = await self._auth_client.refresh_token(self._token)
+            self._token = response.access_token
+            self._auth_provider = JWTAuthProvider(
+                token=self._token,
+                session_manager=self
+            )
+
+    return self._token
+```
+
+**Key Points:**
+- Threshold: 60 seconds (matching Dart SDK)
+- Automatic: No user intervention required
+- Transparent: Client code doesn't need to handle refresh
+- Fallback: If refresh fails, user must re-login
+
+### Form-Based API Design
+
+All auth service endpoints use **forms only** (no JSON), with a specific convention for permissions:
+
+**Permissions Format:**
+- Client sends: Comma-separated string (e.g., `"read:jobs,write:jobs"`)
+- Server receives: Form field `permissions` as string
+- Server parses: Splits on comma to get list
+
+**Example - Create User:**
+```python
+# Client side (SDK)
+form_data = {
+    "username": "testuser",
+    "password": "testpass",
+    "is_admin": False,
+    "permissions": "read:jobs,write:jobs"  # Comma-separated string
+}
+
+response = await session.post("/users/", data=form_data)
+```
+
+**Server side (FastAPI):**
+```python
+@router.post("/users/")
+def create_user(
+    username: str = Form(...),
+    password: str = Form(...),
+    is_admin: bool = Form(False),
+    permissions: str | None = Form(None),  # String, not list
+):
+    # Parse comma-separated string to list
+    permissions_list = []
+    if permissions:
+        permissions_list = [p.strip() for p in permissions.split(",") if p.strip()]
+```
+
+**Why Forms?**
+- Consistent with FastAPI OAuth2 password flow
+- Simple serialization (no nested JSON)
+- Easy to test with cURL/Postman
+- Avoids JSON parsing edge cases
+
+**Why Comma-Separated Permissions?**
+- Simple string format works in forms
+- Easy to parse on server side
+- Consistent across all endpoints (create, update)
+- No ambiguity about list vs string representation
 
 ## Code Quality Standards
 
@@ -172,10 +316,14 @@ cl_client/
 │   ├── __init__.py         # Public API exports
 │   ├── config.py           # All configuration (NO hardcoding)
 │   ├── compute_client.py   # Main client class
-│   ├── auth.py             # Modular auth providers
+│   ├── auth.py             # Modular auth providers (NoAuthProvider, JWTAuthProvider)
 │   ├── models.py           # Pydantic models (mirror server schemas)
 │   ├── exceptions.py       # Custom exceptions
 │   ├── mqtt_monitor.py     # MQTT monitoring with subscription IDs
+│   ├── auth_models.py      # Auth-specific Pydantic models (Phase 2)
+│   ├── server_config.py    # Centralized server URL configuration (Phase 2)
+│   ├── auth_client.py      # Low-level auth API client (Phase 2)
+│   ├── session_manager.py  # High-level auth session management (Phase 2)
 │   └── plugins/            # Plugin clients (9 total)
 │       ├── __init__.py
 │       ├── base.py
@@ -189,23 +337,29 @@ cl_client/
 │       ├── image_conversion.py
 │       └── media_thumbnail.py
 ├── tests/
-│   ├── conftest.py         # Shared fixtures
-│   ├── README.md           # Testing guide
+│   ├── conftest.py         # Shared fixtures (auth_mode parametrization - Phase 2)
+│   ├── README.md           # Testing guide (auth setup - Phase 2)
 │   ├── media/              # Test media files (NOT in git)
 │   │   ├── MEDIA_SETUP.md
 │   │   ├── images/
 │   │   └── videos/
 │   ├── test_client/        # Unit tests
-│   │   ├── test_auth.py
-│   │   ├── test_compute_client.py
-│   │   ├── test_config.py
-│   │   ├── test_models.py
-│   │   ├── test_mqtt_monitor.py
-│   │   └── test_plugins.py (74 tests)
-│   └── test_plugins/       # Integration tests
+│   │   ├── test_auth.py               # Auth provider tests (26 tests - Phase 2)
+│   │   ├── test_auth_models.py        # Auth model tests (18 tests - Phase 2)
+│   │   ├── test_auth_client.py        # AuthClient tests (29 tests - Phase 2)
+│   │   ├── test_server_config.py      # ServerConfig tests (10 tests - Phase 2)
+│   │   ├── test_session_manager.py    # SessionManager tests (20 tests - Phase 2)
+│   │   ├── test_compute_client.py     # ComputeClient tests
+│   │   ├── test_config.py             # Config tests
+│   │   ├── test_models.py             # Model tests
+│   │   ├── test_mqtt_monitor.py       # MQTT tests
+│   │   └── test_plugins.py            # Plugin unit tests (74 tests)
+│   └── test_integration/   # Integration tests (parametrized for both auth modes)
+│       ├── test_auth_errors_integration.py      # Auth error tests (6 tests - Phase 2)
+│       ├── test_user_management_integration.py  # User CRUD tests (8 tests - Phase 2)
 │       ├── test_clip_embedding.py
 │       ├── test_dino_embedding.py
-│       └── ... (9 plugin tests, 25 total)
+│       └── ... (9 plugin tests, parametrized for no-auth and JWT modes)
 └── example/                # Separate CLI tool project
     ├── README.md
     ├── pyproject.toml
@@ -304,6 +458,106 @@ Server validates:
 - None currently - requires server-side debugging
 
 **Priority:** Low (separate server issue to debug later)
+
+---
+
+## Server-Side Changes (Phase 2)
+
+During Phase 2 authentication integration, several critical server-side issues were discovered and fixed:
+
+### 1. JWT Token Field: "sub" → "id"
+
+**Issue:** JWT payload used `"sub"` field but compute service expected `"id"` field.
+
+**Files Modified:**
+1. `/services/auth/src/auth/routes.py`:
+   - Line 75: Changed `"sub": str(user.id)` → `"id": str(user.id)` (login endpoint)
+   - Line 91: Changed `"sub": str(current_user.id)` → `"id": str(current_user.id)` (refresh endpoint)
+   - Line 31: Changed `payload.get("sub")` → `payload.get("id")` (get_current_user validation)
+
+2. `/services/compute/src/compute/auth.py`:
+   - Line 38: Changed `sub: str` → `id: str` (UserPayload model)
+   - Line 121: Changed `options={"require": ["sub", "exp"]}` → `options={"require": ["id", "exp"]}` (JWT validation)
+
+**Reason:** Using `"id"` is more semantically correct for user identification than `"sub"` (subject).
+
+### 2. Endpoint Consistency: All Forms, No JSON
+
+**Issue:** `update_user` endpoint used JSON (Pydantic model) while `create_user` used forms.
+
+**Files Modified:**
+1. `/services/auth/src/auth/routes.py`:
+   - Lines 192-224: Replaced `update_user` endpoint to use Form fields instead of Pydantic JSON:
+     ```python
+     # BEFORE: def update_user(user_id: int, user_update: UserUpdate, ...)
+     # AFTER:
+     def update_user(
+         user_id: int,
+         password: str | None = Form(None),
+         permissions: str | None = Form(None),  # Comma-separated string
+         is_active: bool | None = Form(None),
+         is_admin: bool | None = Form(None),
+         ...
+     )
+     ```
+
+2. `/sdks/pysdk/src/cl_client/auth_client.py`:
+   - Lines 201-213: Updated `create_user()` to convert permissions list to comma-separated string
+   - Lines 319-333: Updated `update_user()` to use `data=` (forms) instead of `json=`
+
+**Reason:** Consistency across all endpoints. Forms are simpler and work better with FastAPI OAuth2.
+
+### 3. Permissions Format: Comma-Separated Strings
+
+**Issue:** Python SDK was sending permissions as Python lists, which don't serialize properly in form data.
+
+**Solution:**
+- Client (SDK): Convert Python list to comma-separated string before sending
+  ```python
+  permissions = ["read:jobs", "write:jobs"]
+  form_data["permissions"] = ",".join(permissions)  # → "read:jobs,write:jobs"
+  ```
+
+- Server: Parse comma-separated string back to list
+  ```python
+  permissions_list = [p.strip() for p in permissions.split(",") if p.strip()]
+  ```
+
+**Files Modified:**
+1. `/sdks/pysdk/src/cl_client/auth_client.py`:
+   - `create_user()`: Added `",".join(form_data["permissions"])` conversion
+   - `update_user()`: Added `",".join(update_data["permissions"])` conversion
+
+2. `/services/auth/src/auth/routes.py`:
+   - `create_user()`: Already had comma-separated parsing (lines 134-150)
+   - `update_user()`: Added comma-separated parsing (lines 205-211)
+
+**Reason:** Form data doesn't support nested structures. Comma-separated strings are simple and unambiguous.
+
+### 4. Auth Database Initialization
+
+**Issue:** Tests failed with "no such table: users" on fresh auth service install.
+
+**Solution:**
+```bash
+cd ../../services/auth
+alembic upgrade head
+```
+
+**Reason:** Database migrations weren't automatically run. Now documented in test setup guides.
+
+### Testing Impact
+
+All changes were validated with comprehensive integration tests:
+- 8 user management tests (create, list, get, update, delete)
+- 6 auth error tests (401, 403 scenarios)
+- 28 plugin tests in JWT mode
+- All tests parametrized to run in both no-auth and JWT modes
+
+**Test Results:**
+- No-auth mode: 23 passed, 2 failed (face_detection - known issue)
+- JWT mode: 41 passed, 2 failed (face_detection - known issue)
+- Total: 64 test scenarios, 62 passing
 
 ---
 
@@ -539,6 +793,45 @@ uv run pytest tests/test_client/
 **Problem:** Connection refused
 **Solution:** Verify `MQTT_BROKER_HOST` and `MQTT_BROKER_PORT` are correct
 
+### Authentication Issues
+
+**Problem:** 401 Unauthorized - "Could not validate credentials"
+**Solutions:**
+1. Token expired - SessionManager should auto-refresh, but if using JWTAuthProvider directly, refresh manually
+2. Invalid token format - Check token is valid JWT
+3. Auth service not running - Start auth service first
+4. Wrong credentials - Verify username/password
+
+**Problem:** 403 Forbidden - "Insufficient permissions"
+**Solutions:**
+1. User lacks required permission - Add permission to user (admin only)
+2. Not an admin user - Only admins can access user management endpoints
+3. Check user permissions: `user = await session.get_current_user(); print(user.permissions)`
+
+**Problem:** JWT field mismatch - "UserPayload object has no attribute 'id'"
+**Solution:** This was a server-side bug fixed in Phase 2. JWT payload now uses `"id"` field instead of `"sub"`. If you see this error:
+1. Update auth service to latest version (with "id" field fix)
+2. Update compute service to expect "id" field
+3. Restart both services
+
+**Problem:** Token not refreshing automatically
+**Solutions:**
+1. Using JWTAuthProvider directly - Switch to SessionManager for auto-refresh
+2. SessionManager refresh threshold - Tokens refresh at < 60 seconds remaining
+3. Check token expiry: `provider._parse_token_expiry(token)`
+
+**Problem:** Permissions not saving correctly
+**Solution:** This was fixed in Phase 2. Ensure:
+1. Client sends permissions as comma-separated string: `"read:jobs,write:jobs"`
+2. Server endpoint uses Form fields (not JSON)
+3. Update SDK to latest version with form-based API
+
+**Problem:** 400 Bad Request on user creation/update
+**Solutions:**
+1. Username already exists (create only)
+2. Invalid permissions format - Use comma-separated string
+3. Missing required fields - Check username and password provided
+
 ### Test Failures
 
 **Problem:** `WorkerUnavailableError`
@@ -546,6 +839,21 @@ uv run pytest tests/test_client/
 
 **Problem:** File download failures
 **Solution:** Check job completed successfully, verify file path in `params`
+
+**Problem:** Auth tests failing - "no such table: users"
+**Solution:** Initialize auth database with alembic:
+```bash
+cd ../../services/auth
+alembic upgrade head
+```
+
+**Problem:** Integration tests skip in JWT mode
+**Solution:** Set required environment variables:
+```bash
+export AUTH_DISABLED=false
+export TEST_USERNAME=admin
+export TEST_PASSWORD=admin
+```
 
 ---
 

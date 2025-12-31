@@ -22,7 +22,13 @@ Create a standalone Python SDK package `pysdk` for the compute service, with com
 - **Authentication**: JWT token support with auth server integration
 - **SessionManager**: High-level auth facade matching Dart SDK
 - **Automatic Token Refresh**: Refresh when < 1 minute before expiry
-- **Test Parametrization**: Run all tests in both no-auth and JWT modes
+- **Test Parametrization**: Multi-mode testing with server detection
+  - Config-file based test user management (`tests/auth_config.json`)
+  - Server auth detection via RootResponse (`auth_required` field)
+  - Multiple test modes: admin, user-with-permission, user-no-permission, no-auth
+  - Automatic user creation/validation
+  - Smart skip/fail logic based on server vs test mode mismatch
+  - Test matrix validation (4 scenarios: auth+enabled, no-auth+disabled, etc.)
 - **CLI Auth Support**: --username, --password, --no-auth flags
 - **Backward Compatibility**: No-auth remains default
 
