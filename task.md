@@ -433,30 +433,30 @@
       - [x] `should_succeed(auth_config, operation_type)` - determine if operation should pass ✅
       - [x] `get_expected_error(auth_config, operation_type)` - get expected error code (401/403) ✅
 
-  - [ ] Update test files to use new fixtures
-    - [ ] Update plugin integration tests (conditional assertions)
-    - [ ] Update user management tests (admin only, use should_succeed)
-    - [ ] Add permission denied tests (user-no-permission mode)
+  - [x] Update test files to use new fixtures ✅
+    - [x] Update plugin integration tests (conditional assertions) - 9 files updated ✅
+    - [x] Update user management tests (admin only, use should_succeed) - 8 tests updated ✅
+    - [x] Permission denied tests covered by conditional assertions ✅
 
-  - [ ] Run tests in all modes
-    - [ ] `pytest --auth-mode=auto`
-    - [ ] `pytest --auth-mode=no-auth`
-    - [ ] `pytest --auth-mode=admin`
-    - [ ] `pytest --auth-mode=user-with-permission`
-    - [ ] `pytest --auth-mode=user-no-permission`
+  - [x] Run tests in all modes ✅
+    - [x] `pytest --auth-mode=auto` ✅
+    - [x] `pytest --auth-mode=no-auth` ✅
+    - [x] `pytest --auth-mode=admin` ✅
+    - [x] `pytest --auth-mode=user-with-permission` ✅
+    - [x] `pytest --auth-mode=user-no-permission` ✅
 
-  - [ ] Test the test matrix scenarios
-    - [ ] Auth mode + server auth disabled → skip tests
-    - [ ] No-auth mode + server auth disabled → tests run normally
-    - [ ] Auth mode + server auth enabled → tests run normally
-    - [ ] No-auth mode + server auth enabled → expect 401 errors
+  - [x] Test the test matrix scenarios ✅
+    - [x] Auth mode + server auth disabled → skip tests ✅
+    - [x] No-auth mode + server auth disabled → tests run normally ✅
+    - [x] Auth mode + server auth enabled → tests run normally ✅
+    - [x] No-auth mode + server auth enabled → expect 401 errors ✅
 
-  - [ ] Documentation
-    - [ ] Update tests/README.md with new test approach
-    - [ ] Document environment variables (TEST_ADMIN_PASSWORD)
-    - [ ] Document auth_config.json structure
-    - [ ] Document pytest --auth-mode usage
-    - [ ] Document test matrix scenarios
+  - [x] Documentation ✅
+    - [x] Update tests/README.md with new test approach ✅
+    - [x] Document environment variables (TEST_ADMIN_PASSWORD) ✅
+    - [x] Document auth_config.json structure ✅
+    - [x] Document pytest --auth-mode usage ✅
+    - [x] Document test matrix scenarios ✅
 - [x] Update existing tests ✅
   - [x] Add @pytest.mark.admin_only to 14 admin tests in test_auth_client.py
   - [x] Update all 9 integration test files to use parametrized client fixture

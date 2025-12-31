@@ -217,21 +217,15 @@ async def test_expired_token_rejected(auth_mode: str):
 @pytest.mark.asyncio
 async def test_compute_operations_with_valid_auth_succeed(
     test_image: Path,
-    authenticated_session: SessionManager | None,
-    auth_mode: str,
+    client: ComputeClient,
+    auth_config: dict,
 ):
     """Positive test: Verify that properly authenticated requests succeed.
 
     This ensures our auth setup is working correctly.
+    This test only runs in auth modes (skipped in no-auth via conftest logic).
     """
-    if auth_mode == "no_auth":
-        pytest.skip("Test only applies to JWT auth mode")
-
-    assert authenticated_session is not None
-
-    # Create client with proper authentication
-    client = authenticated_session.create_compute_client()
-
+    # This test expects auth to be enabled and should succeed
     # Submit a job - should succeed with proper auth
     job = await client.clip_embedding.embed_image(
         image=test_image,
