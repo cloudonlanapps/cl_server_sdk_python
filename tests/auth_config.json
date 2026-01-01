@@ -2,17 +2,18 @@
   "default_auth_mode": "user-with-permission",
   "auth_url": "http://localhost:8000",
   "compute_url": "http://localhost:8002",
+  "store_url": "http://localhost:8001",
   "test_users": {
     "admin": {
       "username": "admin",
       "is_admin": true,
-      "permissions": []
+      "permissions": ["ai_inference_support", "media_store_read", "media_store_write"]
     },
     "user-with-permission": {
       "username": "test_user_perm",
       "password": "user123",
       "is_admin": false,
-      "permissions": ["ai_inference_support"]
+      "permissions": ["ai_inference_support", "media_store_read", "media_store_write"]
     },
     "user-no-permission": {
       "username": "test_user_noperm",

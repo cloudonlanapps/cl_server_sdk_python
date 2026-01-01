@@ -1,6 +1,7 @@
 """Shared fixtures for integration tests."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -72,3 +73,57 @@ def test_video_720p(media_dir: Path) -> Path:
     if not video_path.exists():
         pytest.skip(f"Test video not found: {video_path}")
     return video_path
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def cleanup_store_entities(request: Any):
+    """Clean up all store entities before store integration tests run.
+
+    This ensures tests start with a clean database and don't interfere with each other.
+    Only runs for test_store_integration.py module.
+    """
+    # Only run for store integration tests
+    if "test_store_integration" not in request.module.__name__:
+        yield
+        return
+
+    # Import here to avoid circular dependency
+    import httpx
+    import os
+
+    store_url = "http://localhost:8001"
+    auth_url = "http://localhost:8000"
+    admin_password = os.getenv("TEST_ADMIN_PASSWORD", "admin")
+
+    # Get admin token
+    try:
+        async with httpx.AsyncClient() as client:
+            # Login as admin
+            response = await client.post(
+                f"{auth_url}/auth/token",
+                data={"username": "admin", "password": admin_password},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            if response.status_code == 200:
+                token = response.json()["access_token"]
+
+                # Get all entities
+                response = await client.get(
+                    f"{store_url}/entities?page=1&page_size=1000",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+                if response.status_code == 200:
+                    entities = response.json()["items"]
+
+                    # Delete all entities
+                    for entity in entities:
+                        await client.delete(
+                            f"{store_url}/entities/{entity['id']}",
+                            headers={"Authorization": f"Bearer {token}"},
+                        )
+    except Exception:
+        # If cleanup fails, continue anyway - tests will handle it
+        pass
+
+    yield

@@ -85,6 +85,23 @@ def server_info(test_config: dict[str, Any]) -> dict[str, Any]:
     return asyncio.run(get_server_info(test_config["compute_url"]))
 
 
+async def get_store_info(store_url: str = "http://localhost:8001") -> dict[str, Any]:
+    """Get store configuration including guestMode flag."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(store_url, timeout=2.0)
+            return response.json()
+    except Exception as e:
+        pytest.fail(f"Could not connect to store server at {store_url}: {e}")
+
+
+@pytest.fixture(scope="session")
+def store_info(test_config: dict[str, Any]) -> dict[str, Any]:
+    """Get store info including guestMode flag."""
+    store_url = test_config.get("store_url", "http://localhost:8001")
+    return asyncio.run(get_store_info(store_url))
+
+
 @pytest.fixture(scope="session")
 def auth_mode(
     request: pytest.FixtureRequest,
@@ -234,17 +251,21 @@ async def test_users_setup(
 def auth_config(
     auth_mode: str,
     server_info: dict[str, Any],
+    store_info: dict[str, Any],
     test_users_setup: dict[str, dict[str, Any]],
     test_config: dict[str, Any],
 ) -> dict[str, Any]:
     """Provide auth configuration for current test."""
     server_auth_enabled = server_info.get("auth_required", False)
+    store_guest_mode = store_info.get("guestMode", "off")  # "on" = public read, "off" = auth required
 
     config: dict[str, Any] = {
         "mode": auth_mode,
         "server_auth_enabled": server_auth_enabled,
+        "store_guest_mode": store_guest_mode,
         "auth_url": test_config["auth_url"],
         "compute_url": test_config["compute_url"],
+        "store_url": test_config.get("store_url", "http://localhost:8001"),  # Add store URL
     }
 
     # Determine expected behavior
@@ -256,6 +277,7 @@ def auth_config(
                 "is_admin": False,
                 "has_permissions": not server_auth_enabled,  # Only succeed if server has no auth
                 "should_fail_with_auth_error": server_auth_enabled,  # Expect 401 if server requires auth
+                "permissions": [],  # No permissions in no-auth mode
             }
         )
     else:
@@ -267,6 +289,7 @@ def auth_config(
                 "is_admin": user_creds["is_admin"],
                 "has_permissions": auth_mode in ["admin", "user-with-permission"],
                 "should_fail_with_auth_error": False,
+                "permissions": user_creds.get("permissions", []),  # Add permissions list
             }
         )
 
@@ -308,12 +331,83 @@ async def client(test_client):
     return test_client
 
 
+@pytest.fixture
+async def store_manager(auth_config: dict[str, Any]):
+    """Create StoreManager based on auth configuration."""
+    from cl_client.store_manager import StoreManager
+
+    if auth_config["mode"] == "no-auth":
+        # Guest mode
+        manager = StoreManager.guest(base_url=str(auth_config["store_url"]))
+        await manager.__aenter__()
+        yield manager
+        await manager.__aexit__(None, None, None)
+    else:
+        # Authenticated mode
+        config = ServerConfig(
+            auth_url=str(auth_config["auth_url"]),
+            compute_url=str(auth_config["compute_url"]),
+            store_url=str(auth_config["store_url"]),
+        )
+        session = SessionManager(server_config=config)
+        await session.login(
+            str(auth_config["username"]),
+            str(auth_config["password"]),
+        )
+
+        manager = session.create_store_manager()
+        await manager.__aenter__()
+
+        # Attach session for cleanup
+        manager._auth_session = session  # type: ignore[attr-defined]
+
+        yield manager
+
+        await manager.__aexit__(None, None, None)
+        await session.close()
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
 def should_succeed(auth_config: dict[str, Any], operation_type: str = "plugin") -> bool:
-    """Determine if operation should succeed based on auth config."""
+    """Determine if operation should succeed based on auth config.
+
+    Args:
+        auth_config: Authentication configuration
+        operation_type: Type of operation - "plugin", "admin", "store_read", "store_write"
+
+    Store-specific logic:
+    - "store_read": Can be public if read_auth disabled (assumes disabled in no-auth mode)
+    - "store_write": ALWAYS requires auth + media_store_write permission
+    """
+    mode = auth_config["mode"]
+
+    # Store read operations - can be public if guestMode is "on"
+    if operation_type == "store_read":
+        store_guest_mode = auth_config.get("store_guest_mode", "off")
+        if store_guest_mode == "on":
+            # Guest mode enabled - read operations work for everyone
+            return True
+        # Guest mode disabled - need auth and permission
+        if mode == "no-auth":
+            return False
+        # With auth, check for media_store_read permission or admin
+        return auth_config["is_admin"] or "media_store_read" in auth_config.get("permissions", [])
+
+    # Store write operations - ALWAYS require auth + permission
+    elif operation_type == "store_write":
+        if mode == "no-auth":
+            # Write never works without auth
+            return False
+        if auth_config["is_admin"]:
+            # Admin can always write
+            return True
+        # Check for media_store_write permission
+        return "media_store_write" in auth_config.get("permissions", [])
+
+    # Existing logic for plugin and admin operations
     if auth_config["should_fail_with_auth_error"]:
         return False
 
@@ -328,7 +422,36 @@ def should_succeed(auth_config: dict[str, Any], operation_type: str = "plugin") 
 def get_expected_error(
     auth_config: dict[str, Any], operation_type: str = "plugin"
 ) -> int | None:
-    """Get expected HTTP error code for failed operations."""
+    """Get expected HTTP error code for failed operations.
+
+    Args:
+        auth_config: Authentication configuration
+        operation_type: Type of operation - "plugin", "admin", "store_read", "store_write"
+
+    Store-specific logic:
+    - store_read: 401 if read_auth enabled and no token, 403 if no permission
+    - store_write: 401 if no token, 403 if insufficient permission
+    """
+    mode = auth_config["mode"]
+
+    # Store read operations
+    if operation_type == "store_read":
+        if mode == "no-auth":
+            # Only fails if read_auth is enabled (401 Unauthorized)
+            # For testing, we assume read_auth is disabled in no-auth mode
+            # so this shouldn't be called
+            return 401
+        # Has token but no permission
+        return 403
+
+    # Store write operations
+    elif operation_type == "store_write":
+        if mode == "no-auth":
+            return 401  # No token
+        # Has token but no permission
+        return 403
+
+    # Existing logic for plugin and admin operations
     if auth_config["should_fail_with_auth_error"]:
         return 401  # Unauthorized - no credentials provided
 

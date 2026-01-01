@@ -19,6 +19,7 @@ from .server_config import ServerConfig
 
 if TYPE_CHECKING:
     from .compute_client import ComputeClient
+    from .store_manager import StoreManager
 
 
 class SessionManager:
@@ -83,6 +84,11 @@ class SessionManager:
         # Session state
         self._current_token: str | None = None
         self._current_user: UserResponse | None = None
+
+    @property
+    def _server_config(self) -> ServerConfig:
+        """Get server configuration (for use by client factories)."""
+        return self._config
 
     # ========================================================================
     # Authentication Lifecycle
@@ -228,7 +234,7 @@ class SessionManager:
         return self._current_token
 
     # ========================================================================
-    # ComputeClient Factory
+    # Client Factories
     # ========================================================================
 
     def create_compute_client(self) -> "ComputeClient":
@@ -275,6 +281,50 @@ class SessionManager:
             mqtt_broker=self._config.mqtt_broker,
             mqtt_port=self._config.mqtt_port,
             auth_provider=auth_provider,
+        )
+
+    def create_store_manager(self) -> "StoreManager":
+        """Create StoreManager with authentication from this session.
+
+        Creates a StoreManager pre-configured with authentication from this
+        SessionManager. Requires prior authentication via login().
+
+        Returns:
+            Pre-configured StoreManager instance
+
+        Raises:
+            RuntimeError: If not authenticated (call login() first)
+
+        Example (Authenticated):
+            session = SessionManager()
+            await session.login("user", "password")
+
+            # Create store manager with auth
+            store = session.create_store_manager()
+
+            # Upload image
+            result = await store.create_entity(
+                label="My Photo",
+                image_path=Path("photo.jpg")
+            )
+            if result.is_success:
+                print(f"Created entity ID: {result.data.id}")
+
+        Example (Guest mode - read-only):
+            # For guest mode, use StoreManager.guest() instead
+            from cl_client import StoreManager
+            store = StoreManager.guest()
+            result = await store.list_entities()
+        """
+        # Import here to avoid circular dependency
+        from .store_manager import StoreManager
+
+        if not self.is_authenticated():
+            raise RuntimeError("Not authenticated. Call login() first.")
+
+        return StoreManager.authenticated(
+            session_manager=self,
+            base_url=self._config.store_url,
         )
 
     # ========================================================================

@@ -25,6 +25,15 @@ from .models import JobResponse, WorkerCapabilitiesResponse, WorkerCapability
 from .mqtt_monitor import MQTTJobMonitor
 from .server_config import ServerConfig
 from .session_manager import SessionManager
+from .store_manager import StoreManager
+from .store_models import (
+    Entity,
+    EntityListResponse,
+    EntityPagination,
+    EntityVersion,
+    StoreConfig,
+    StoreOperationResult,
+)
 
 __all__ = [
     # Client
@@ -42,6 +51,13 @@ __all__ = [
     "UserResponse",
     "UserCreateRequest",
     "UserUpdateRequest",
+    # Store Models
+    "Entity",
+    "EntityListResponse",
+    "EntityPagination",
+    "EntityVersion",
+    "StoreConfig",
+    "StoreOperationResult",
     # Exceptions
     "ComputeClientError",
     "JobNotFoundError",
@@ -55,6 +71,8 @@ __all__ = [
     "JWTAuthProvider",
     "get_default_auth",
     "SessionManager",
+    # Store
+    "StoreManager",
     # MQTT
     "MQTTJobMonitor",
 ]
