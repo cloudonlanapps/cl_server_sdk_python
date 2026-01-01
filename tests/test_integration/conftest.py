@@ -90,9 +90,21 @@ async def cleanup_store_entities(request: Any):
     # Import here to avoid circular dependency
     import httpx
     import os
+    import json
+    from pathlib import Path
 
-    store_url = "http://localhost:8001"
-    auth_url = "http://localhost:8000"
+    # Read URLs from auth_config.json
+    config_path = Path(__file__).parent.parent / "auth_config.json"
+    try:
+        with open(config_path) as f:
+            config = json.load(f)
+            store_url = config.get("store_url", "http://localhost:8001")
+            auth_url = config.get("auth_url", "http://localhost:8000")
+    except Exception:
+        # Fallback to defaults if config not found
+        store_url = "http://localhost:8001"
+        auth_url = "http://localhost:8000"
+
     admin_password = os.getenv("TEST_ADMIN_PASSWORD", "admin")
 
     # Get admin token

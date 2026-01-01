@@ -1,23 +1,24 @@
 {
+  "auth_url": "http://localhost:8010",
+  "compute_url": "http://localhost:8012",
+  "store_url": "http://localhost:8011",
   "default_auth_mode": "user-with-permission",
-  "auth_url": "http://localhost:8000",
-  "compute_url": "http://localhost:8002",
-  "store_url": "http://localhost:8001",
   "test_users": {
     "admin": {
       "username": "admin",
+      "password": "admin",
       "is_admin": true,
-      "permissions": ["ai_inference_support", "media_store_read", "media_store_write"]
+      "permissions": []
     },
     "user-with-permission": {
       "username": "test_user_perm",
-      "password": "user123",
+      "password": "test123",
       "is_admin": false,
       "permissions": ["ai_inference_support", "media_store_read", "media_store_write"]
     },
     "user-no-permission": {
       "username": "test_user_noperm",
-      "password": "user456",
+      "password": "test123",
       "is_admin": false,
       "permissions": []
     }
