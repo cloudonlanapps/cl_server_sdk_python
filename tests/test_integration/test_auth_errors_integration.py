@@ -16,6 +16,11 @@ import pytest
 from cl_client import ComputeClient
 from cl_client.session_manager import SessionManager
 
+import sys
+from pathlib import Path as PathlibPath
+sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
+from conftest import get_expected_error, should_succeed
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -25,7 +30,7 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str
     This test only runs in JWT mode since it tests auth enforcement.
     In no-auth mode, it's skipped.
     """
-    if auth_mode == "no_auth":
+    if auth_mode == "no-auth":
         pytest.skip("Test only applies to JWT auth mode")
 
     # Create client without authentication (no token)
@@ -48,7 +53,7 @@ async def test_invalid_token_rejected(test_image: Path, auth_mode: str):
 
     This test only runs in JWT mode.
     """
-    if auth_mode == "no_auth":
+    if auth_mode == "no-auth":
         pytest.skip("Test only applies to JWT auth mode")
 
     from cl_client.auth import JWTAuthProvider
@@ -74,7 +79,7 @@ async def test_malformed_token_rejected(test_image: Path, auth_mode: str):
 
     This test only runs in JWT mode.
     """
-    if auth_mode == "no_auth":
+    if auth_mode == "no-auth":
         pytest.skip("Test only applies to JWT auth mode")
 
     from cl_client.auth import JWTAuthProvider
@@ -225,17 +230,27 @@ async def test_compute_operations_with_valid_auth_succeed(
     This ensures our auth setup is working correctly.
     This test only runs in auth modes (skipped in no-auth via conftest logic).
     """
-    # This test expects auth to be enabled and should succeed
-    # Submit a job - should succeed with proper auth
-    job = await client.clip_embedding.embed_image(
-        image=test_image,
-        wait=True,
-        timeout=30.0,
-    )
+    # Check if user has sufficient permissions
+    if should_succeed(auth_config, operation_type="plugin"):
+        # Should succeed - run normal assertions
+        job = await client.clip_embedding.embed_image(
+            image=test_image,
+            wait=True,
+            timeout=30.0,
+        )
 
-    # Verify success
-    assert job.status == "completed"
-    assert job.task_output is not None
+        # Verify success
+        assert job.status == "completed"
+        assert job.task_output is not None
 
-    # Cleanup
-    await client.delete_job(job.job_id)
+        # Cleanup
+        await client.delete_job(job.job_id)
+    else:
+        # Should fail - verify correct error code
+        expected_error = get_expected_error(auth_config, operation_type="plugin")
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            await client.clip_embedding.embed_image(
+                image=test_image,
+                wait=False,
+            )
+        assert exc_info.value.response.status_code == expected_error
