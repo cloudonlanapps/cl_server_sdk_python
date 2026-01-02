@@ -512,6 +512,24 @@ A separate command-line interface tool is available in the `example/` directory.
 
 MIT License - see [LICENSE](./LICENSE) file for details.
 
+## Future Enhancements
+
+The Dart SDK has implemented some high-level features that could be valuable for pysdk:
+
+- **UserManager Module**: High-level user management API with command pattern architecture
+- **StoreManager Module**: High-level store entity management API
+- **User Prefixing System**: Automatic prefixing for utility-created users (prevents namespace conflicts)
+- **Command Pattern**: Clean architecture with Result wrapper pattern for consistent error handling
+- **Result Wrapper Pattern**: Type-safe error handling without raising exceptions
+
+These features are documented in the Dart SDK and could be adapted to Python. See `sdks/dartsdk/PYSDK_ADOPTION.md` for implementation details and recommendations.
+
+**Benefits for pysdk**:
+- More Pythonic error handling (Result pattern similar to `Optional[T]`)
+- Better code organization (command pattern for complex operations)
+- Namespace management for testing/automation tools (user prefixing)
+- Improved developer experience (high-level manager APIs)
+
 ## Support
 
 - **Issues**: Report bugs at https://github.com/your-org/cl-server/issues
