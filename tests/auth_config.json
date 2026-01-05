@@ -14,7 +14,11 @@
       "username": "test_user_perm",
       "password": "test123",
       "is_admin": false,
-      "permissions": ["ai_inference_support", "media_store_read", "media_store_write"]
+      "permissions": [
+        "ai_inference_support",
+        "media_store_read",
+        "media_store_write"
+      ]
     },
     "user-no-permission": {
       "username": "test_user_noperm",
