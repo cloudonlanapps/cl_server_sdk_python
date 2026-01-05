@@ -73,11 +73,10 @@ AUTH_MODES=()
 
 # Server configurations to test
 # Format: "compute_auth:store_guest_mode:description"
+# Note: Only 2 configs needed - services are independent, no cross-interaction
 CONFIGURATIONS=(
-    "true:off:Compute-Auth-ON_Store-Guest-OFF"
-    "true:on:Compute-Auth-ON_Store-Guest-ON"
-    "false:on:Compute-Auth-OFF_Store-Guest-ON"
-    "false:off:Compute-Auth-OFF_Store-Guest-OFF"
+    "true:off:Auth-Required"  # Both services require authentication
+    "false:on:Guest-Mode"     # Both services in guest mode (no auth)
 )
 
 # ============================================================================
@@ -184,15 +183,52 @@ set_store_guest_mode() {
     fi
 }
 
+# Set compute auth via admin API
+set_compute_auth() {
+    local auth_required=$1  # "true" or "false"
+    local enabled="$auth_required"  # auth_enabled=true means auth required
+
+    log_info "Setting compute auth to: $auth_required (auth_enabled=$enabled)"
+
+    # Get admin token
+    local token=$(curl -s -X POST "http://${HOST}:${PORT_AUTH}/auth/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "username=admin&password=admin" 2>/dev/null | jq -r '.access_token' 2>/dev/null)
+
+    if [ -z "$token" ] || [ "$token" = "null" ]; then
+        log_error "Failed to get admin token"
+        return 1
+    fi
+
+    # Set auth_enabled configuration
+    curl -s -X PUT "http://${HOST}:${PORT_COMPUTE}/admin/config/auth" \
+        -H "Authorization: Bearer $token" \
+        -F "enabled=$enabled" > /dev/null 2>&1
+
+    sleep 1
+
+    # Verify
+    local result=$(curl -s "http://${HOST}:${PORT_COMPUTE}" 2>/dev/null | jq -r '.guestMode' 2>/dev/null)
+    local expected_guest_mode="on"
+    if [ "$auth_required" = "true" ]; then
+        expected_guest_mode="off"
+    fi
+
+    if [ "$result" = "$expected_guest_mode" ]; then
+        log_success "Compute auth set to: auth_required=$auth_required (guestMode=$result)"
+        return 0
+    else
+        log_error "Failed to set compute auth. Expected guestMode: $expected_guest_mode, Got: $result"
+        return 1
+    fi
+}
+
 # Start all servers
 start_servers() {
-    local compute_auth=$1  # "true" or "false"
-    local config_desc=$2   # Configuration description
+    log_section "Starting Servers"
 
-    log_section "Starting Servers (Compute auth=$compute_auth)"
-
-    # Create unique data directory for this configuration
-    local data_dir="${RUN_LOG_DIR}/data_${config_desc}"
+    # Create data directory
+    local data_dir="${RUN_LOG_DIR}/data"
     mkdir -p "$data_dir"
     log_info "Using data directory: $data_dir"
 
@@ -203,31 +239,27 @@ start_servers() {
     # Run database migrations for all services
     log_info "Running database migrations..."
     cd "${SERVICES_DIR}/auth"
-    uv run alembic upgrade head > "${RUN_LOG_DIR}/auth_migration_${config_desc}.log" 2>&1
+    uv run alembic upgrade head > "${RUN_LOG_DIR}/auth_migration.log" 2>&1
     cd "${SERVICES_DIR}/store"
-    uv run alembic upgrade head > "${RUN_LOG_DIR}/store_migration_${config_desc}.log" 2>&1
+    uv run alembic upgrade head > "${RUN_LOG_DIR}/store_migration.log" 2>&1
     cd "${SERVICES_DIR}/compute"
-    uv run alembic upgrade head > "${RUN_LOG_DIR}/compute_migration_${config_desc}.log" 2>&1
+    uv run alembic upgrade head > "${RUN_LOG_DIR}/compute_migration.log" 2>&1
     log_success "Database migrations completed"
 
-    # Start Auth Server (always with auth)
+    # Start Auth Server
     log_info "Starting Auth server on port ${PORT_AUTH}..."
     cd "${SERVICES_DIR}/auth"
-    uv run auth-server --port ${PORT_AUTH} > "${RUN_LOG_DIR}/server_auth_${config_desc}.log" 2>&1 &
+    uv run auth-server --port ${PORT_AUTH} > "${RUN_LOG_DIR}/server_auth.log" 2>&1 &
 
     # Start Store Server
     log_info "Starting Store server on port ${PORT_STORE}..."
     cd "${SERVICES_DIR}/store"
-    uv run store --port ${PORT_STORE} > "${RUN_LOG_DIR}/server_store_${config_desc}.log" 2>&1 &
+    uv run store --port ${PORT_STORE} > "${RUN_LOG_DIR}/server_store.log" 2>&1 &
 
-    # Start Compute Server
-    log_info "Starting Compute server on port ${PORT_COMPUTE} (auth=$compute_auth)..."
+    # Start Compute Server (auth will be configured via API after startup)
+    log_info "Starting Compute server on port ${PORT_COMPUTE}..."
     cd "${SERVICES_DIR}/compute"
-    if [ "$compute_auth" = "false" ]; then
-        uv run compute-server --port ${PORT_COMPUTE} --no-auth > "${RUN_LOG_DIR}/server_compute_${config_desc}.log" 2>&1 &
-    else
-        uv run compute-server --port ${PORT_COMPUTE} > "${RUN_LOG_DIR}/server_compute_${config_desc}.log" 2>&1 &
-    fi
+    uv run compute-server --port ${PORT_COMPUTE} > "${RUN_LOG_DIR}/server_compute.log" 2>&1 &
 
     # Wait for all servers to be ready
     if ! wait_for_server "http://${HOST}:${PORT_AUTH}"; then
@@ -252,7 +284,7 @@ start_servers() {
         --worker-id "${WORKER_ID}" \
         --port ${PORT_COMPUTE} \
         --tasks clip_embedding,dino_embedding,exif,face_detection,face_embedding,hash,hls_streaming,image_conversion,media_thumbnail \
-        > "${RUN_LOG_DIR}/server_worker_${config_desc}.log" 2>&1 &
+        > "${RUN_LOG_DIR}/server_worker.log" 2>&1 &
 
     sleep 3
     log_success "All servers started"
@@ -372,6 +404,22 @@ main() {
     echo "Logs: ${RUN_LOG_DIR}/" >> "$RESULTS_FILE"
     echo "" >> "$RESULTS_FILE"
 
+    # Start servers once before testing all configurations
+    log_section "Starting Servers Once"
+
+    # Stop any existing servers first
+    stop_servers
+
+    # Start all servers (will be configured via API for each test)
+    if ! start_servers; then
+        log_error "Failed to start servers"
+        echo "FAILED TO START SERVERS" >> "$RESULTS_FILE"
+        return 1
+    fi
+
+    # Update test configuration with correct ports
+    update_test_config
+
     # Test each configuration
     for config in "${CONFIGURATIONS[@]}"; do
         # Parse configuration
@@ -380,24 +428,17 @@ main() {
         log_section "Configuration: $config_desc"
         log_info "Compute auth_required=$compute_auth, Store guestMode=$store_guest"
 
-        # Stop any existing servers
-        stop_servers
-
-        # Start servers with this configuration
-        if ! start_servers "$compute_auth" "$config_desc"; then
-            log_error "Failed to start servers for $config_desc"
-            echo "FAILED TO START SERVERS: $config_desc" >> "$RESULTS_FILE"
-            continue
-        fi
-
-        # Update test configuration with correct ports
-        update_test_config
-
-        # Set store guest mode
+        # Set store guest mode via API
         if ! set_store_guest_mode "$store_guest"; then
             log_error "Failed to set store guest mode for $config_desc"
             echo "FAILED TO CONFIGURE STORE: $config_desc" >> "$RESULTS_FILE"
-            stop_servers
+            continue
+        fi
+
+        # Set compute auth via API
+        if ! set_compute_auth "$compute_auth"; then
+            log_error "Failed to set compute auth for $config_desc"
+            echo "FAILED TO CONFIGURE COMPUTE: $config_desc" >> "$RESULTS_FILE"
             continue
         fi
 
@@ -408,12 +449,13 @@ main() {
 
         run_all_auth_modes "$config_desc"
 
-        # Stop servers before next configuration
-        stop_servers
-
         # Brief pause between configurations
         sleep 2
     done
+
+    # Stop servers once after all tests complete
+    log_section "Stopping Servers"
+    stop_servers
 
     # ========================================================================
     # Final Summary
