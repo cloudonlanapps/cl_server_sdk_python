@@ -24,7 +24,7 @@ from conftest import get_expected_error, should_succeed
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str):
+async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str, auth_config: dict):
     """Test that requests without auth are rejected when auth is enabled.
 
     This test only runs in JWT mode since it tests auth enforcement.
@@ -34,7 +34,7 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str
         pytest.skip("Test only applies to JWT auth mode")
 
     # Create client without authentication (no token)
-    async with ComputeClient() as client:
+    async with ComputeClient(base_url=str(auth_config["compute_url"])) as client:
         # Try to submit a job without authentication
         with pytest.raises(httpx.HTTPStatusError) as exc_info:
             await client.clip_embedding.embed_image(
@@ -48,7 +48,7 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_invalid_token_rejected(test_image: Path, auth_mode: str):
+async def test_invalid_token_rejected(test_image: Path, auth_mode: str, auth_config: dict):
     """Test that requests with invalid tokens are rejected.
 
     This test only runs in JWT mode.
@@ -60,7 +60,7 @@ async def test_invalid_token_rejected(test_image: Path, auth_mode: str):
 
     # Create client with invalid token
     invalid_auth = JWTAuthProvider(token="invalid.token.here")
-    async with ComputeClient(auth_provider=invalid_auth) as client:
+    async with ComputeClient(base_url=str(auth_config["compute_url"]), auth_provider=invalid_auth) as client:
         # Try to submit a job with invalid token
         with pytest.raises(httpx.HTTPStatusError) as exc_info:
             await client.clip_embedding.embed_image(
@@ -74,7 +74,7 @@ async def test_invalid_token_rejected(test_image: Path, auth_mode: str):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_malformed_token_rejected(test_image: Path, auth_mode: str):
+async def test_malformed_token_rejected(test_image: Path, auth_mode: str, auth_config: dict):
     """Test that requests with malformed tokens are rejected.
 
     This test only runs in JWT mode.
@@ -86,7 +86,7 @@ async def test_malformed_token_rejected(test_image: Path, auth_mode: str):
 
     # Create client with malformed token (not even JWT format)
     malformed_auth = JWTAuthProvider(token="not-a-jwt-token")
-    async with ComputeClient(auth_provider=malformed_auth) as client:
+    async with ComputeClient(base_url=str(auth_config["compute_url"]), auth_provider=malformed_auth) as client:
         # Try to submit a job with malformed token
         with pytest.raises(httpx.HTTPStatusError) as exc_info:
             await client.clip_embedding.embed_image(
@@ -101,7 +101,7 @@ async def test_malformed_token_rejected(test_image: Path, auth_mode: str):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_non_admin_user_forbidden_from_admin_endpoints(auth_mode: str):
+async def test_non_admin_user_forbidden_from_admin_endpoints(auth_mode: str, auth_config: dict):
     """Test that non-admin users get 403 Forbidden on admin endpoints.
 
     This test:
@@ -114,8 +114,16 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_mode: str):
     if auth_mode == "no_auth":
         pytest.skip("Test only applies to JWT auth mode")
 
+    from cl_client import ServerConfig
+
+    # Create server config with correct URLs
+    config = ServerConfig(
+        auth_url=str(auth_config["auth_url"]),
+        compute_url=str(auth_config["compute_url"]),
+    )
+
     # First, login as admin to create a regular user
-    admin_session = SessionManager()
+    admin_session = SessionManager(server_config=config)
     await admin_session.login("admin", "admin")
 
     try:
@@ -137,7 +145,7 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_mode: str):
         )
 
         # Now login as the non-admin user
-        user_session = SessionManager()
+        user_session = SessionManager(server_config=config)
         await user_session.login("testuser_nonadmin", "testpass123")
 
         try:
