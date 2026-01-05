@@ -43,6 +43,58 @@ async def test_face_detection_http_polling(
         assert isinstance(job.task_output["faces"], list)
         assert len(job.task_output["faces"]) > 0, "Should detect at least one face"
 
+        # Validate new schema fields for each detected face
+        for i, face in enumerate(job.task_output["faces"]):
+            # Validate bbox structure and normalized coordinates
+            assert "bbox" in face, f"Face {i}: Missing bbox"
+            bbox = face["bbox"]
+            assert all(k in bbox for k in ["x1", "y1", "x2", "y2"])
+            assert 0.0 <= bbox["x1"] <= 1.0
+            assert 0.0 <= bbox["y1"] <= 1.0
+            assert 0.0 <= bbox["x2"] <= 1.0
+            assert 0.0 <= bbox["y2"] <= 1.0
+
+            # Validate confidence
+            assert "confidence" in face
+            assert 0.0 <= face["confidence"] <= 1.0
+
+            # Validate landmarks structure and normalized coordinates
+            assert "landmarks" in face, f"Face {i}: Missing landmarks"
+            landmarks = face["landmarks"]
+            required_landmarks = ["right_eye", "left_eye", "nose_tip", "mouth_right", "mouth_left"]
+            for landmark_name in required_landmarks:
+                assert landmark_name in landmarks
+                landmark = landmarks[landmark_name]
+                assert isinstance(landmark, (list, tuple)) and len(landmark) == 2
+                x, y = landmark
+                assert 0.0 <= x <= 1.0, f"Face {i}: {landmark_name}.x not normalized"
+                assert 0.0 <= y <= 1.0, f"Face {i}: {landmark_name}.y not normalized"
+
+            # Validate file_path field
+            assert "file_path" in face
+            assert isinstance(face["file_path"], str) and len(face["file_path"]) > 0
+
+        # Test downloading cropped face image
+        import tempfile
+        from PIL import Image
+
+        first_face = job.task_output["faces"][0]
+        crop_path = first_face["file_path"]
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        await client.download_job_file(job.job_id, crop_path, tmp_path)
+
+        assert tmp_path.exists()
+        assert tmp_path.stat().st_size > 0
+
+        # Verify it's a valid image
+        img = Image.open(tmp_path)
+        assert img.width > 0 and img.height > 0
+        img.close()
+        tmp_path.unlink()
+
         await client.delete_job(job.job_id)
     else:
         # Should fail - expect auth error
@@ -88,6 +140,58 @@ async def test_face_detection_mqtt_callbacks(
         full_job = await client.get_job(job.job_id)
         assert "faces" in full_job.task_output
         assert len(full_job.task_output["faces"]) > 0, "Should detect at least one face"
+
+        # Validate new schema fields for each detected face
+        for i, face in enumerate(full_job.task_output["faces"]):
+            # Validate bbox structure and normalized coordinates
+            assert "bbox" in face, f"Face {i}: Missing bbox"
+            bbox = face["bbox"]
+            assert all(k in bbox for k in ["x1", "y1", "x2", "y2"])
+            assert 0.0 <= bbox["x1"] <= 1.0
+            assert 0.0 <= bbox["y1"] <= 1.0
+            assert 0.0 <= bbox["x2"] <= 1.0
+            assert 0.0 <= bbox["y2"] <= 1.0
+
+            # Validate confidence
+            assert "confidence" in face
+            assert 0.0 <= face["confidence"] <= 1.0
+
+            # Validate landmarks structure and normalized coordinates
+            assert "landmarks" in face, f"Face {i}: Missing landmarks"
+            landmarks = face["landmarks"]
+            required_landmarks = ["right_eye", "left_eye", "nose_tip", "mouth_right", "mouth_left"]
+            for landmark_name in required_landmarks:
+                assert landmark_name in landmarks
+                landmark = landmarks[landmark_name]
+                assert isinstance(landmark, (list, tuple)) and len(landmark) == 2
+                x, y = landmark
+                assert 0.0 <= x <= 1.0, f"Face {i}: {landmark_name}.x not normalized"
+                assert 0.0 <= y <= 1.0, f"Face {i}: {landmark_name}.y not normalized"
+
+            # Validate file_path field
+            assert "file_path" in face
+            assert isinstance(face["file_path"], str) and len(face["file_path"]) > 0
+
+        # Test downloading cropped face image
+        import tempfile
+        from PIL import Image
+
+        first_face = full_job.task_output["faces"][0]
+        crop_path = first_face["file_path"]
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        await client.download_job_file(job.job_id, crop_path, tmp_path)
+
+        assert tmp_path.exists()
+        assert tmp_path.stat().st_size > 0
+
+        # Verify it's a valid image
+        img = Image.open(tmp_path)
+        assert img.width > 0 and img.height > 0
+        img.close()
+        tmp_path.unlink()
 
         await client.delete_job(job.job_id)
     else:

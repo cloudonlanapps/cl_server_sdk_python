@@ -1,9 +1,13 @@
 """Shared fixtures for integration tests."""
 
+import os
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+# Test vectors base directory (can be overridden via environment variable)
+TEST_VECTORS_DIR = Path(os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server/test_vectors"))
 
 
 @pytest.fixture(scope="session")
@@ -40,20 +44,18 @@ def test_image_exif(media_dir: Path) -> Path:
 
 
 @pytest.fixture
-def test_image_face_single(media_dir: Path) -> Path:
+def test_image_face_single() -> Path:
     """Get image with single face."""
-    image_path = media_dir / "images" / "test_face_single.jpg"
-    if not image_path.exists():
-        pytest.skip(f"Test image not found: {image_path}")
+    image_path = TEST_VECTORS_DIR / "images" / "test_face_single.jpg"
+    assert image_path.exists(), f"Test image not found: {image_path}"
     return image_path
 
 
 @pytest.fixture
-def test_image_face_multiple(media_dir: Path) -> Path:
+def test_image_face_multiple() -> Path:
     """Get image with multiple faces."""
-    image_path = media_dir / "images" / "test_face_multiple.jpg"
-    if not image_path.exists():
-        pytest.skip(f"Test image not found: {image_path}")
+    image_path = TEST_VECTORS_DIR / "images" / "test_face_multiple.jpg"
+    assert image_path.exists(), f"Test image not found: {image_path}"
     return image_path
 
 
