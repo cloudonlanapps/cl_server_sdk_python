@@ -118,9 +118,11 @@ def auth_mode(
         else:
             mode = "no-auth"
 
-    # SKIP LOGIC: If testing auth mode but server doesn't support it
-    if mode != "no-auth" and not server_info.get("auth_required", False):
-        pytest.skip("Server not configured for authentication - skipping auth tests")
+    # No session-level skip - let individual tests handle auth mode validation
+    # Different services have different auth requirements:
+    # - Compute: Can have AUTH_DISABLED=true
+    # - Store: Has its own guestMode for reads
+    # - Auth: Always requires auth for protected endpoints
 
     return mode
 
@@ -471,15 +473,9 @@ def get_expected_error(
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Skip admin-only tests in no-auth mode."""
-    for item in items:
-        # Check if test is marked as admin_only
-        if "admin_only" in item.keywords:
-            # Check if we're in no-auth mode
-            auth_mode_opt = config.getoption("--auth-mode", default="auto")
-            if auth_mode_opt == "no-auth":
-                item.add_marker(
-                    pytest.mark.skip(
-                        reason="Admin operations require authentication (no-auth mode)"
-                    )
-                )
+    """No skipping - all tests run to verify server behavior.
+
+    We test server endpoints in all auth modes to verify they return
+    the correct HTTP status codes (200, 401, 403) based on the configuration.
+    """
+    pass  # Keep function for potential future use
