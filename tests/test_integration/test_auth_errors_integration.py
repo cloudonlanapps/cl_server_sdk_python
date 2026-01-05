@@ -26,22 +26,16 @@ from conftest import get_expected_error, should_succeed
 async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str, auth_config: dict):
     """Test server's handling of unauthenticated requests.
 
-    In no-auth mode: compute server allows requests without auth (200 OK)
-    In JWT mode: compute server rejects unauthenticated requests (401 Unauthorized)
+    When compute auth disabled: server allows requests without auth (200 OK)
+    When compute auth enabled: server rejects unauthenticated requests (401 Unauthorized)
     """
     # Create client without authentication (no token)
     async with ComputeClient(base_url=str(auth_config["compute_url"])) as client:
-        if auth_mode == "no-auth":
-            # In no-auth mode, server allows requests without auth
-            # Should succeed and return a job
-            job = await client.clip_embedding.embed_image(
-                image=test_image,
-                wait=False,
-            )
-            assert job is not None
-            assert job.job_id is not None
-        else:
-            # In JWT mode, server requires auth
+        # Check if compute server requires auth
+        compute_auth_required = auth_config.get("compute_auth_required", True)
+
+        if compute_auth_required:
+            # Compute server has auth enabled - should reject unauthenticated requests
             # Should get 401 Unauthorized
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
                 await client.clip_embedding.embed_image(
@@ -49,6 +43,15 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str
                     wait=False,
                 )
             assert exc_info.value.response.status_code == 401
+        else:
+            # Compute server has auth disabled - should accept requests
+            # Should succeed and return a job
+            job = await client.clip_embedding.embed_image(
+                image=test_image,
+                wait=False,
+            )
+            assert job is not None
+            assert job.job_id is not None
 
 
 @pytest.mark.integration
@@ -56,25 +59,19 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_mode: str
 async def test_invalid_token_rejected(test_image: Path, auth_mode: str, auth_config: dict):
     """Test server's handling of invalid tokens.
 
-    In no-auth mode: server ignores tokens (valid or invalid), request succeeds
-    In JWT mode: server validates tokens and rejects invalid ones (401 Unauthorized)
+    When compute auth disabled: server ignores tokens (valid or invalid), request succeeds
+    When compute auth enabled: server validates tokens and rejects invalid ones (401 Unauthorized)
     """
     from cl_client.auth import JWTAuthProvider
 
     # Create client with invalid token
     invalid_auth = JWTAuthProvider(token="invalid.token.here")
     async with ComputeClient(base_url=str(auth_config["compute_url"]), auth_provider=invalid_auth) as client:
-        if auth_mode == "no-auth":
-            # In no-auth mode, server ignores tokens (valid or invalid)
-            # Should succeed and return a job
-            job = await client.clip_embedding.embed_image(
-                image=test_image,
-                wait=False,
-            )
-            assert job is not None
-            assert job.job_id is not None
-        else:
-            # In JWT mode, server validates tokens
+        # Check if compute server requires auth
+        compute_auth_required = auth_config.get("compute_auth_required", True)
+
+        if compute_auth_required:
+            # Compute server has auth enabled - validates tokens
             # Should get 401 Unauthorized (invalid token)
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
                 await client.clip_embedding.embed_image(
@@ -82,23 +79,8 @@ async def test_invalid_token_rejected(test_image: Path, auth_mode: str, auth_con
                     wait=False,
                 )
             assert exc_info.value.response.status_code == 401
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_malformed_token_rejected(test_image: Path, auth_mode: str, auth_config: dict):
-    """Test server's handling of malformed tokens.
-
-    In no-auth mode: server ignores tokens, request succeeds
-    In JWT mode: server rejects malformed tokens (401 Unauthorized)
-    """
-    from cl_client.auth import JWTAuthProvider
-
-    # Create client with malformed token (not even JWT format)
-    malformed_auth = JWTAuthProvider(token="not-a-jwt-token")
-    async with ComputeClient(base_url=str(auth_config["compute_url"]), auth_provider=malformed_auth) as client:
-        if auth_mode == "no-auth":
-            # In no-auth mode, server ignores tokens
+        else:
+            # Compute server has auth disabled - ignores tokens
             # Should succeed and return a job
             job = await client.clip_embedding.embed_image(
                 image=test_image,
@@ -106,8 +88,26 @@ async def test_malformed_token_rejected(test_image: Path, auth_mode: str, auth_c
             )
             assert job is not None
             assert job.job_id is not None
-        else:
-            # In JWT mode, server rejects malformed tokens
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_malformed_token_rejected(test_image: Path, auth_mode: str, auth_config: dict):
+    """Test server's handling of malformed tokens.
+
+    When compute auth disabled: server ignores tokens, request succeeds
+    When compute auth enabled: server rejects malformed tokens (401 Unauthorized)
+    """
+    from cl_client.auth import JWTAuthProvider
+
+    # Create client with malformed token (not even JWT format)
+    malformed_auth = JWTAuthProvider(token="not-a-jwt-token")
+    async with ComputeClient(base_url=str(auth_config["compute_url"]), auth_provider=malformed_auth) as client:
+        # Check if compute server requires auth
+        compute_auth_required = auth_config.get("compute_auth_required", True)
+
+        if compute_auth_required:
+            # Compute server has auth enabled - rejects malformed tokens
             # Should get 401 Unauthorized
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
                 await client.clip_embedding.embed_image(
@@ -115,6 +115,15 @@ async def test_malformed_token_rejected(test_image: Path, auth_mode: str, auth_c
                     wait=False,
                 )
             assert exc_info.value.response.status_code == 401
+        else:
+            # Compute server has auth disabled - ignores tokens
+            # Should succeed and return a job
+            job = await client.clip_embedding.embed_image(
+                image=test_image,
+                wait=False,
+            )
+            assert job is not None
+            assert job.job_id is not None
 
 
 @pytest.mark.integration
@@ -133,7 +142,6 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_mode: str, aut
         # In no-auth mode, auth service still requires authentication
         # Try to access admin endpoint without auth
         from cl_client import ServerConfig
-        import httpx
 
         auth_url = str(auth_config["auth_url"])
 

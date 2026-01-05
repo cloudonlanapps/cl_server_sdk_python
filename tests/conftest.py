@@ -264,6 +264,7 @@ def auth_config(
     config: dict[str, Any] = {
         "mode": auth_mode,
         "server_auth_enabled": server_auth_enabled,
+        "compute_auth_required": server_auth_enabled,  # Explicit name for compute server auth
         "store_guest_mode": store_guest_mode,
         "auth_url": test_config["auth_url"],
         "compute_url": test_config["compute_url"],
@@ -374,20 +375,43 @@ async def store_manager(auth_config: dict[str, Any]):
 # ============================================================================
 
 def should_succeed(auth_config: dict[str, Any], operation_type: str = "plugin") -> bool:
-    """Determine if operation should succeed based on auth config.
+    """Determine if operation should succeed based on auth config and server state.
 
     Args:
         auth_config: Authentication configuration
         operation_type: Type of operation - "plugin", "admin", "store_read", "store_write"
 
+    Compute-specific logic:
+    - "plugin": Requires ai_inference_support permission if compute auth enabled
+    - "admin": Requires admin role if compute auth enabled
+    - If compute auth disabled: All compute operations succeed regardless of credentials
+
     Store-specific logic:
-    - "store_read": Can be public if read_auth disabled (assumes disabled in no-auth mode)
+    - "store_read": Can be public if guestMode is "on"
     - "store_write": ALWAYS requires auth + media_store_write permission
     """
     mode = auth_config["mode"]
+    compute_auth_required = auth_config.get("compute_auth_required", True)
+
+    # Compute operations (plugin and admin)
+    if operation_type in ["plugin", "admin"]:
+        # If compute server has auth disabled, all requests succeed
+        if not compute_auth_required:
+            return True
+
+        # If compute server has auth enabled, check auth mode and permissions
+        if mode == "no-auth":
+            # No credentials provided, auth is required
+            return False
+
+        # With auth enabled and credentials provided, check permissions
+        if operation_type == "admin":
+            return auth_config["is_admin"]
+        elif operation_type == "plugin":
+            return auth_config["has_permissions"]
 
     # Store read operations - can be public if guestMode is "on"
-    if operation_type == "store_read":
+    elif operation_type == "store_read":
         store_guest_mode = auth_config.get("store_guest_mode", "off")
         if store_guest_mode == "on":
             # Guest mode enabled - read operations work for everyone
@@ -409,59 +433,73 @@ def should_succeed(auth_config: dict[str, Any], operation_type: str = "plugin") 
         # Check for media_store_write permission
         return "media_store_write" in auth_config.get("permissions", [])
 
-    # Existing logic for plugin and admin operations
-    if auth_config["should_fail_with_auth_error"]:
-        return False
-
-    if operation_type == "admin":
-        return auth_config["is_admin"]
-    elif operation_type == "plugin":
-        return auth_config["has_permissions"]
-
     return True
 
 
 def get_expected_error(
     auth_config: dict[str, Any], operation_type: str = "plugin"
 ) -> int | None:
-    """Get expected HTTP error code for failed operations.
+    """Get expected HTTP error code for failed operations, or None if operation should succeed.
 
     Args:
         auth_config: Authentication configuration
         operation_type: Type of operation - "plugin", "admin", "store_read", "store_write"
 
+    Compute-specific logic:
+    - If compute auth disabled: No error (operations succeed)
+    - If compute auth enabled + no credentials: 401 Unauthorized
+    - If compute auth enabled + insufficient permissions: 403 Forbidden
+
     Store-specific logic:
-    - store_read: 401 if read_auth enabled and no token, 403 if no permission
+    - store_read: 401 if guestMode off and no token, 403 if no permission
     - store_write: 401 if no token, 403 if insufficient permission
     """
     mode = auth_config["mode"]
+    compute_auth_required = auth_config.get("compute_auth_required", True)
+
+    # Compute operations (plugin and admin)
+    if operation_type in ["plugin", "admin"]:
+        # If compute server has auth disabled, no errors expected
+        if not compute_auth_required:
+            return None
+
+        # If auth enabled, check auth mode and permissions
+        if mode == "no-auth":
+            return 401  # No credentials provided
+
+        # Has credentials, check permissions
+        if operation_type == "plugin":
+            if not auth_config["has_permissions"]:
+                return 403  # Authenticated but no permission
+        elif operation_type == "admin":
+            if not auth_config["is_admin"]:
+                return 403  # Authenticated but not admin
+
+        return None  # Should succeed
 
     # Store read operations
-    if operation_type == "store_read":
+    elif operation_type == "store_read":
+        store_guest_mode = auth_config.get("store_guest_mode", "off")
+        if store_guest_mode == "on":
+            return None  # Guest mode - no error
+
         if mode == "no-auth":
-            # Only fails if read_auth is enabled (401 Unauthorized)
-            # For testing, we assume read_auth is disabled in no-auth mode
-            # so this shouldn't be called
-            return 401
-        # Has token but no permission
-        return 403
+            return 401  # No token, guest mode off
+
+        if not (auth_config["is_admin"] or "media_store_read" in auth_config.get("permissions", [])):
+            return 403  # Has token but no permission
+
+        return None
 
     # Store write operations
     elif operation_type == "store_write":
         if mode == "no-auth":
             return 401  # No token
-        # Has token but no permission
-        return 403
 
-    # Existing logic for plugin and admin operations
-    if auth_config["should_fail_with_auth_error"]:
-        return 401  # Unauthorized - no credentials provided
+        if not (auth_config["is_admin"] or "media_store_write" in auth_config.get("permissions", [])):
+            return 403  # Has token but insufficient permission
 
-    if operation_type == "admin" and not auth_config["is_admin"]:
-        return 403  # Forbidden - not admin
-
-    if operation_type == "plugin" and not auth_config["has_permissions"]:
-        return 403  # Forbidden - no permissions
+        return None
 
     return None
 
