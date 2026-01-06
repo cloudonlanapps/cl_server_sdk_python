@@ -72,11 +72,11 @@ read_auth_modes() {
 AUTH_MODES=()
 
 # Server configurations to test
-# Format: "compute_auth:store_guest_mode:description"
+# Format: "compute_guest_mode:store_guest_mode:description"
 # Note: Only 2 configs needed - services are independent, no cross-interaction
 CONFIGURATIONS=(
-    "true:off:Auth-Required"  # Both services require authentication
-    "false:on:Guest-Mode"     # Both services in guest mode (no auth)
+    "off:off:Auth-Required"  # Both services require authentication (guest mode off)
+    "on:on:Guest-Mode"       # Both services in guest mode (no auth required)
 )
 
 # ============================================================================
@@ -148,12 +148,12 @@ wait_for_server() {
 # Set store guest mode via admin API
 set_store_guest_mode() {
     local mode=$1  # "on" or "off"
-    local enabled="false"
-    if [ "$mode" = "off" ]; then
-        enabled="true"  # read_auth_enabled=true means guest mode off
+    local guest_mode="false"
+    if [ "$mode" = "on" ]; then
+        guest_mode="true"  # guest_mode=true means no auth required
     fi
 
-    log_info "Setting store guest mode to: $mode (read_auth_enabled=$enabled)"
+    log_info "Setting store guest mode to: $mode (guest_mode=$guest_mode)"
 
     # Get admin token
     local token=$(curl -s -X POST "http://${HOST}:${PORT_AUTH}/auth/token" \
@@ -165,10 +165,10 @@ set_store_guest_mode() {
         return 1
     fi
 
-    # Set read_auth configuration
-    curl -s -X PUT "http://${HOST}:${PORT_STORE}/admin/config/read-auth" \
+    # Set guest_mode configuration
+    curl -s -X PUT "http://${HOST}:${PORT_STORE}/admin/config/guest-mode" \
         -H "Authorization: Bearer $token" \
-        -F "enabled=$enabled" > /dev/null 2>&1
+        -F "guest_mode=$guest_mode" > /dev/null 2>&1
 
     sleep 1
 
@@ -183,12 +183,15 @@ set_store_guest_mode() {
     fi
 }
 
-# Set compute auth via admin API
-set_compute_auth() {
-    local auth_required=$1  # "true" or "false"
-    local enabled="$auth_required"  # auth_enabled=true means auth required
+# Set compute guest mode via admin API
+set_compute_guest_mode() {
+    local mode=$1  # "on" or "off"
+    local guest_mode="false"
+    if [ "$mode" = "on" ]; then
+        guest_mode="true"  # guest_mode=true means no auth required
+    fi
 
-    log_info "Setting compute auth to: $auth_required (auth_enabled=$enabled)"
+    log_info "Setting compute guest mode to: $mode (guest_mode=$guest_mode)"
 
     # Get admin token
     local token=$(curl -s -X POST "http://${HOST}:${PORT_AUTH}/auth/token" \
@@ -200,25 +203,20 @@ set_compute_auth() {
         return 1
     fi
 
-    # Set auth_enabled configuration
-    curl -s -X PUT "http://${HOST}:${PORT_COMPUTE}/admin/config/auth" \
+    # Set guest_mode configuration
+    curl -s -X PUT "http://${HOST}:${PORT_COMPUTE}/admin/config/guest-mode" \
         -H "Authorization: Bearer $token" \
-        -F "enabled=$enabled" > /dev/null 2>&1
+        -F "guest_mode=$guest_mode" > /dev/null 2>&1
 
     sleep 1
 
     # Verify
     local result=$(curl -s "http://${HOST}:${PORT_COMPUTE}" 2>/dev/null | jq -r '.guestMode' 2>/dev/null)
-    local expected_guest_mode="on"
-    if [ "$auth_required" = "true" ]; then
-        expected_guest_mode="off"
-    fi
-
-    if [ "$result" = "$expected_guest_mode" ]; then
-        log_success "Compute auth set to: auth_required=$auth_required (guestMode=$result)"
+    if [ "$result" = "$mode" ]; then
+        log_success "Compute guest mode set to: $mode"
         return 0
     else
-        log_error "Failed to set compute auth. Expected guestMode: $expected_guest_mode, Got: $result"
+        log_error "Failed to set compute guest mode. Expected: $mode, Got: $result"
         return 1
     fi
 }
@@ -423,10 +421,10 @@ main() {
     # Test each configuration
     for config in "${CONFIGURATIONS[@]}"; do
         # Parse configuration
-        IFS=':' read -r compute_auth store_guest config_desc <<< "$config"
+        IFS=':' read -r compute_guest store_guest config_desc <<< "$config"
 
         log_section "Configuration: $config_desc"
-        log_info "Compute auth_required=$compute_auth, Store guestMode=$store_guest"
+        log_info "Compute guestMode=$compute_guest, Store guestMode=$store_guest"
 
         # Set store guest mode via API
         if ! set_store_guest_mode "$store_guest"; then
@@ -435,9 +433,9 @@ main() {
             continue
         fi
 
-        # Set compute auth via API
-        if ! set_compute_auth "$compute_auth"; then
-            log_error "Failed to set compute auth for $config_desc"
+        # Set compute guest mode via API
+        if ! set_compute_guest_mode "$compute_guest"; then
+            log_error "Failed to set compute guest mode for $config_desc"
             echo "FAILED TO CONFIGURE COMPUTE: $config_desc" >> "$RESULTS_FILE"
             continue
         fi
