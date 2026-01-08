@@ -75,66 +75,78 @@ def test_video_720p(media_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def cleanup_store_entities(request: Any):
+async def cleanup_store_entities(
+    request: Any,
+    auth_config: dict[str, Any],
+):
     """Clean up all store entities before store integration tests run.
 
-    This ensures tests start with a clean database and don't interfere with each other.
-    Only runs for test_store_integration.py module.
+    Runs only for test_store_integration.py.
+    Uses CLI-provided auth credentials.
     """
+
     # Only run for store integration tests
     if "test_store_integration" not in request.module.__name__:
         yield
         return
 
-    # Import here to avoid circular dependency
+    # Skip cleanup if no auth (cannot delete entities)
+    if not auth_config["username"]:
+        yield
+        return
+
+    # Cleanup requires admin
+    if not auth_config["is_admin"]:
+        pytest.skip("Store cleanup requires admin credentials")
+
     import httpx
-    import os
-    import json
-    from pathlib import Path
 
-    # Read URLs from auth_config.json
-    config_path = Path(__file__).parent.parent / "auth_config.json"
-    try:
-        with open(config_path) as f:
-            config = json.load(f)
-            store_url = config.get("store_url", "http://localhost:8001")
-            auth_url = config.get("auth_url", "http://localhost:8000")
-    except Exception:
-        # Fallback to defaults if config not found
-        store_url = "http://localhost:8001"
-        auth_url = "http://localhost:8000"
+    store_url = auth_config["store_url"]
+    auth_url = auth_config["auth_url"]
+    username = auth_config["username"]
+    password = auth_config["password"]
 
-    admin_password = os.getenv("TEST_ADMIN_PASSWORD", "admin")
-
-    # Get admin token
     try:
         async with httpx.AsyncClient() as client:
-            # Login as admin
-            response = await client.post(
+            # Login
+            token_resp = await client.post(
                 f"{auth_url}/auth/token",
-                data={"username": "admin", "password": admin_password},
+                data={
+                    "username": username,
+                    "password": password,
+                },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=5.0,
             )
-            if response.status_code == 200:
-                token = response.json()["access_token"]
 
-                # Get all entities
-                response = await client.get(
-                    f"{store_url}/entities?page=1&page_size=1000",
+            if token_resp.status_code != 200:
+                pytest.fail("Failed to authenticate admin for store cleanup")
+
+            token = token_resp.json()["access_token"]
+
+            # Fetch entities
+            resp = await client.get(
+                f"{store_url}/entities?page=1&page_size=1000",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5.0,
+            )
+
+            if resp.status_code != 200:
+                yield
+                return
+
+            entities = resp.json().get("items", [])
+
+            # Delete all
+            for entity in entities:
+                await client.delete(
+                    f"{store_url}/entities/{entity['id']}",
                     headers={"Authorization": f"Bearer {token}"},
+                    timeout=5.0,
                 )
 
-                if response.status_code == 200:
-                    entities = response.json()["items"]
-
-                    # Delete all entities
-                    for entity in entities:
-                        await client.delete(
-                            f"{store_url}/entities/{entity['id']}",
-                            headers={"Authorization": f"Bearer {token}"},
-                        )
     except Exception:
-        # If cleanup fails, continue anyway - tests will handle it
+        # Non-fatal cleanup failure
         pass
 
     yield

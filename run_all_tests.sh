@@ -106,24 +106,6 @@ log_section() {
     echo -e "${YELLOW}========================================${NC}"
 }
 
-# Kill processes on specific ports
-kill_port() {
-    local port=$1
-    local pid=$(lsof -ti:$port 2>/dev/null)
-    if [ -n "$pid" ]; then
-        log_info "Killing process on port $port (PID: $pid)"
-        kill -9 $pid 2>/dev/null || true
-        sleep 1
-    fi
-}
-
-# Kill worker by ID
-kill_worker() {
-    local worker_id=$1
-    log_info "Killing worker with ID: $worker_id"
-    pkill -f "compute-worker --worker-id $worker_id" 2>/dev/null || true
-    sleep 1
-}
 
 # Wait for server to be ready
 wait_for_server() {
@@ -402,18 +384,6 @@ main() {
     echo "Logs: ${RUN_LOG_DIR}/" >> "$RESULTS_FILE"
     echo "" >> "$RESULTS_FILE"
 
-    # Start servers once before testing all configurations
-    log_section "Starting Servers Once"
-
-    # Stop any existing servers first
-    stop_servers
-
-    # Start all servers (will be configured via API for each test)
-    if ! start_servers; then
-        log_error "Failed to start servers"
-        echo "FAILED TO START SERVERS" >> "$RESULTS_FILE"
-        return 1
-    fi
 
     # Update test configuration with correct ports
     update_test_config
@@ -451,9 +421,7 @@ main() {
         sleep 2
     done
 
-    # Stop servers once after all tests complete
-    log_section "Stopping Servers"
-    stop_servers
+   
 
     # ========================================================================
     # Final Summary

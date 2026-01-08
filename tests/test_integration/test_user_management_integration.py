@@ -24,6 +24,7 @@ from cl_client.session_manager import SessionManager
 
 import sys
 from pathlib import Path as PathlibPath
+
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import get_expected_error, should_succeed
 
@@ -31,7 +32,7 @@ from conftest import get_expected_error, should_succeed
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_create_user_success(auth_config: dict[str, Any]):
+async def test_create_user_success(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin user creation endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -45,7 +46,7 @@ async def test_create_user_success(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -114,7 +115,7 @@ async def test_create_user_success(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_list_users_success(auth_config: dict[str, Any]):
+async def test_list_users_success(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin list users endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -127,7 +128,7 @@ async def test_list_users_success(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -173,7 +174,7 @@ async def test_list_users_success(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_get_user_success(auth_config: dict[str, Any]):
+async def test_get_user_success(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin get user endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -186,7 +187,7 @@ async def test_get_user_success(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -255,7 +256,7 @@ async def test_get_user_success(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_permissions(auth_config: dict[str, Any]):
+async def test_update_user_permissions(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin update user permissions endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -268,7 +269,7 @@ async def test_update_user_permissions(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -342,7 +343,7 @@ async def test_update_user_permissions(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_password(auth_config: dict[str, Any]):
+async def test_update_user_password(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin update user password endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -355,7 +356,7 @@ async def test_update_user_password(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -433,7 +434,7 @@ async def test_update_user_password(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_active_status(auth_config: dict[str, Any]):
+async def test_update_user_active_status(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin update user active status endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -446,7 +447,7 @@ async def test_update_user_active_status(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -519,7 +520,7 @@ async def test_update_user_active_status(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_delete_user_success(auth_config: dict[str, Any]):
+async def test_delete_user_success(auth_config: dict[str, Any], is_no_auth: bool):
     """Test admin delete user endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -532,7 +533,7 @@ async def test_delete_user_success(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
@@ -596,7 +597,9 @@ async def test_delete_user_success(auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_list_users_with_pagination(auth_config: dict[str, Any]):
+async def test_list_users_with_pagination(
+    auth_config: dict[str, Any], is_no_auth: bool
+):
     """Test admin list users pagination endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -609,7 +612,7 @@ async def test_list_users_with_pagination(auth_config: dict[str, Any]):
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
-    if auth_config["mode"] == "no-auth":
+    if is_no_auth:
         # Try to access admin endpoint without valid auth
         auth_url = str(auth_config["auth_url"])
         async with httpx.AsyncClient() as client:
