@@ -10,7 +10,19 @@ from typing import Any
 import httpx
 
 from cl_client.auth import AuthProvider
-from cl_client.store_models import Entity, EntityListResponse, EntityVersion, StoreConfig
+from cl_client.store_models import (
+    Entity,
+    EntityJobResponse,
+    EntityListResponse,
+    EntityVersion,
+    FaceMatchResult,
+    FaceResponse,
+    KnownPersonResponse,
+    RootResponse,
+    SimilarFacesResponse,
+    SimilarImagesResponse,
+    StoreConfig,
+)
 
 
 class StoreClient:
@@ -77,6 +89,27 @@ class StoreClient:
         if self._auth_provider:
             headers.update(self._auth_provider.get_headers())
         return headers
+
+    # Health check
+
+    async def health_check(self) -> RootResponse:
+        """Get service health status and configuration.
+
+        Returns:
+            RootResponse with service status, version, and guest mode setting
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        return RootResponse.model_validate(response.json())
 
     # Read operations (use query parameters)
 
@@ -175,6 +208,90 @@ class StoreClient:
         response.raise_for_status()
         version_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]  # Validated by Pydantic
         return [EntityVersion.model_validate(v) for v in version_data]
+
+    async def get_entity_faces(self, entity_id: int) -> list[FaceResponse]:
+        """Get all detected faces for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of FaceResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/faces",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
+        return [FaceResponse.model_validate(f) for f in faces_data]
+
+    async def get_entity_jobs(self, entity_id: int) -> list[EntityJobResponse]:
+        """Get all compute jobs for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of EntityJobResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/jobs",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        jobs_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
+        return [EntityJobResponse.model_validate(j) for j in jobs_data]
+
+    async def find_similar_images(
+        self,
+        entity_id: int,
+        limit: int = 5,
+        score_threshold: float = 0.85,
+        include_details: bool = False,
+    ) -> SimilarImagesResponse:
+        """Find similar images using CLIP embeddings.
+
+        Args:
+            entity_id: Entity ID to find similar images for
+            limit: Maximum number of results (1-50)
+            score_threshold: Minimum similarity score (0.0-1.0)
+            include_details: Whether to include full entity details in results
+
+        Returns:
+            SimilarImagesResponse with results
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found or no embedding)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        params: dict[str, Any] = {
+            "limit": limit,
+            "score_threshold": score_threshold,
+            "include_details": include_details,
+        }
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/similar",
+            params=params,
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        return SimilarImagesResponse.model_validate(response.json())
 
     # Write operations (use multipart/form-data)
 
@@ -394,8 +511,40 @@ class StoreClient:
         response.raise_for_status()
         return StoreConfig.model_validate(response.json())
 
+    async def update_guest_mode(self, guest_mode: bool) -> dict[str, bool | str]:
+        """Update guest mode configuration (admin only).
+
+        Note: Uses multipart/form-data, NOT JSON.
+
+        Args:
+            guest_mode: Whether to enable guest mode (true = no authentication required)
+
+        Returns:
+            Dictionary with guest_mode status and message
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (401, 403, etc.)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data = {
+            "guest_mode": str(guest_mode).lower(),
+        }
+
+        response = await self._client.put(
+            f"{self._base_url}/admin/config/guest-mode",
+            data=data,  # Form data, not JSON
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        return response.json()  # type: ignore[return-value]
+
     async def update_read_auth(self, enabled: bool) -> StoreConfig:
         """Update read authentication configuration (admin only).
+
+        DEPRECATED: Use update_guest_mode() instead.
+        This method is kept for backward compatibility.
 
         Note: Uses multipart/form-data, NOT JSON.
 
@@ -408,17 +557,162 @@ class StoreClient:
         Raises:
             httpx.HTTPStatusError: If the request fails (401, 403, etc.)
         """
+        # Convert enabled to guest_mode (inverted logic)
+        guest_mode = not enabled
+        result = await self.update_guest_mode(guest_mode)
+        # Get updated config to return StoreConfig
+        return await self.get_config()
+
+    # Face recognition and similarity search endpoints
+
+    async def find_similar_faces(
+        self,
+        face_id: int,
+        limit: int = 5,
+        threshold: float = 0.7,
+    ) -> SimilarFacesResponse:
+        """Find similar faces using face embeddings.
+
+        Args:
+            face_id: Face ID to find similar faces for
+            limit: Maximum number of results (1-50)
+            threshold: Minimum similarity score (0.0-1.0)
+
+        Returns:
+            SimilarFacesResponse with results
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found or no embedding)
+        """
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        data = {
-            "enabled": str(enabled).lower(),
+        params: dict[str, Any] = {
+            "limit": limit,
+            "threshold": threshold,
         }
 
-        response = await self._client.put(
-            f"{self._base_url}/admin/config/read-auth",
-            data=data,  # Form data, not JSON
+        response = await self._client.get(
+            f"{self._base_url}/faces/{face_id}/similar",
+            params=params,
             headers=self._get_headers(),
         )
         response.raise_for_status()
-        return StoreConfig.model_validate(response.json())
+        return SimilarFacesResponse.model_validate(response.json())
+
+    async def get_face_matches(self, face_id: int) -> list[FaceMatchResult]:
+        """Get all match records for a face (similarity history).
+
+        Args:
+            face_id: Face ID
+
+        Returns:
+            List of FaceMatchResult models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/faces/{face_id}/matches",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        matches_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
+        return [FaceMatchResult.model_validate(m) for m in matches_data]
+
+    async def get_all_known_persons(self) -> list[KnownPersonResponse]:
+        """Get all known persons (identified by face recognition).
+
+        Returns:
+            List of KnownPersonResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/known-persons",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        persons_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
+        return [KnownPersonResponse.model_validate(p) for p in persons_data]
+
+    async def get_known_person(self, person_id: int) -> KnownPersonResponse:
+        """Get details of a specific known person.
+
+        Args:
+            person_id: Person ID
+
+        Returns:
+            KnownPersonResponse model
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/known-persons/{person_id}",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        return KnownPersonResponse.model_validate(response.json())
+
+    async def get_known_person_faces(self, person_id: int) -> list[FaceResponse]:
+        """Get all faces for a specific known person.
+
+        Args:
+            person_id: Person ID
+
+        Returns:
+            List of FaceResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/known-persons/{person_id}/faces",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
+        return [FaceResponse.model_validate(f) for f in faces_data]
+
+    async def update_known_person_name(
+        self, person_id: int, name: str
+    ) -> KnownPersonResponse:
+        """Update the name of a known person.
+
+        Args:
+            person_id: Person ID
+            name: New name for the person
+
+        Returns:
+            Updated KnownPersonResponse model
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if not found, 422 for validation)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        # Use JSON for PATCH request body
+        body = {"name": name}
+
+        response = await self._client.patch(
+            f"{self._base_url}/known-persons/{person_id}",
+            json=body,
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+        return KnownPersonResponse.model_validate(response.json())
