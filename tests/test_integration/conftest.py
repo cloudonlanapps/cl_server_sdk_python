@@ -1,9 +1,303 @@
-"""Shared fixtures for integration tests."""
+"""Integration test configuration - fixtures and CLI options for integration tests."""
 
+import asyncio
 import os
 from pathlib import Path
 
+import httpx
 import pytest
+from cl_client import ComputeClient, ServerConfig, SessionManager
+
+# Import models from parent conftest
+import sys
+from pathlib import Path as PathlibPath
+sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
+from conftest import (
+    AuthConfig,
+    CliConfig,
+    ComputeServerInfo,
+    ServerRootResponse,
+    StoreServerInfo,
+    UserInfo,
+)
+
+
+# ============================================================================
+# SERVER PROBING
+# ============================================================================
+
+
+async def get_server_info(url: str) -> ServerRootResponse:
+    """Query server root endpoint and return parsed response."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, timeout=2.0)
+            return ServerRootResponse.model_validate(r.json())
+    except Exception as e:
+        pytest.fail(f"Cannot connect to server at {url}: {e}")
+
+
+# ============================================================================
+# PYTEST CLI OPTIONS (INTEGRATION TESTS ONLY)
+# ============================================================================
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add CLI options for integration tests (not required for unit tests)."""
+    parser.addoption(
+        "--auth-url",
+        action="store",
+        default=None,
+        help="Auth service URL (required for integration tests)"
+    )
+    parser.addoption(
+        "--compute-url",
+        action="store",
+        default=None,
+        help="Compute service URL (required for integration tests)"
+    )
+    parser.addoption(
+        "--store-url",
+        action="store",
+        default=None,
+        help="Store service URL (required for integration tests)"
+    )
+    parser.addoption(
+        "--username",
+        action="store",
+        default=None,
+        help="Username for authenticated integration tests"
+    )
+    parser.addoption(
+        "--password",
+        action="store",
+        default=None,
+        help="Password for authenticated integration tests"
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Configure pytest markers."""
+    config.addinivalue_line(
+        "markers",
+        "admin_only: test requires admin privileges",
+    )
+
+
+# ============================================================================
+# SESSION FIXTURES
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def cli_config(request: pytest.FixtureRequest) -> CliConfig:
+    """Parse CLI arguments into Pydantic model.
+
+    Validates that required arguments are provided for integration tests.
+    """
+    auth_url = request.config.getoption("--auth-url")
+    compute_url = request.config.getoption("--compute-url")
+    store_url = request.config.getoption("--store-url")
+
+    if not auth_url or not compute_url or not store_url:
+        pytest.fail(
+            "Integration tests require --auth-url, --compute-url, and --store-url arguments"
+        )
+
+    return CliConfig(
+        auth_url=str(auth_url),
+        compute_url=str(compute_url),
+        store_url=str(store_url),
+        username=request.config.getoption("--username") or None,
+        password=request.config.getoption("--password") or None,
+    )
+
+
+@pytest.fixture(scope="session")
+def compute_server_info(cli_config: CliConfig) -> ComputeServerInfo:
+    """Query compute server for auth_required and guest_mode flags."""
+    info = asyncio.run(get_server_info(cli_config.compute_url))
+    return ComputeServerInfo(
+        auth_required=info.auth_required,
+        guest_mode=(info.guestMode == "on"),
+    )
+
+
+@pytest.fixture(scope="session")
+def store_server_info(cli_config: CliConfig) -> StoreServerInfo:
+    """Query store server for guestMode flag."""
+    info = asyncio.run(get_server_info(cli_config.store_url))
+    return StoreServerInfo(
+        guest_mode=(info.guestMode == "on"),
+    )
+
+
+@pytest.fixture(scope="session")
+def user_info(cli_config: CliConfig) -> UserInfo | None:
+    """Query auth API to get current user's admin status and permissions.
+
+    Returns None if running in no-auth mode (no username provided).
+    """
+    if not cli_config.username:
+        return None
+
+    from cl_client.auth_client import AuthClient
+
+    # Username and password are guaranteed to be not None here
+    assert cli_config.username is not None
+    assert cli_config.password is not None
+
+    async def fetch_user_info():
+        auth_client = AuthClient(base_url=cli_config.auth_url)
+        try:
+            # Login to get token
+            assert cli_config.username is not None
+            assert cli_config.password is not None
+            token_response = await auth_client.login(
+                username=cli_config.username,
+                password=cli_config.password,
+            )
+
+            # Query /users/me endpoint
+            user_response = await auth_client.get_current_user(
+                token=token_response.access_token
+            )
+
+            # Convert to UserInfo Pydantic model
+            return UserInfo(
+                id=user_response.id,
+                username=user_response.username,
+                is_admin=user_response.is_admin,
+                is_active=user_response.is_active,
+                permissions=user_response.permissions,
+            )
+        finally:
+            await auth_client.close()
+
+    return asyncio.run(fetch_user_info())
+
+
+# ============================================================================
+# AUTH CONFIG (CORE OBJECT USED BY TESTS)
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def auth_config(
+    cli_config: CliConfig,
+    compute_server_info: ComputeServerInfo,
+    store_server_info: StoreServerInfo,
+    user_info: UserInfo | None,
+) -> AuthConfig:
+    """Build complete auth configuration from all sources."""
+    has_auth = bool(cli_config.username)
+
+    return AuthConfig(
+        mode="auth" if has_auth else "no-auth",
+        auth_url=cli_config.auth_url,
+        compute_url=cli_config.compute_url,
+        store_url=cli_config.store_url,
+        compute_auth_required=compute_server_info.auth_required,
+        compute_guest_mode=compute_server_info.guest_mode,
+        store_guest_mode=store_server_info.guest_mode,
+        username=cli_config.username,
+        password=cli_config.password,
+        user_info=user_info,
+    )
+
+
+# ============================================================================
+# CLIENT FIXTURES
+# ============================================================================
+
+
+@pytest.fixture
+async def test_client(auth_config: AuthConfig):
+    """Create ComputeClient with auth based on config."""
+    if not auth_config.username:
+        client = ComputeClient(base_url=auth_config.compute_url)
+        yield client
+        await client.close()
+        return
+
+    # Username and password are guaranteed to be not None here
+    assert auth_config.username is not None
+    assert auth_config.password is not None
+
+    config = ServerConfig(
+        auth_url=auth_config.auth_url,
+        compute_url=auth_config.compute_url,
+        store_url=auth_config.store_url,
+    )
+    session = SessionManager(server_config=config)
+
+    await session.login(
+        auth_config.username,
+        auth_config.password,
+    )
+
+    client = session.create_compute_client()
+    client._auth_session = session  # type: ignore[attr-defined]  # for cleanup / admin calls
+
+    yield client
+
+    await client.close()
+    await session.close()
+
+
+@pytest.fixture
+async def client(test_client: ComputeClient) -> ComputeClient:
+    """Backward compatibility alias"""
+    return test_client
+
+
+@pytest.fixture
+async def store_manager(auth_config: AuthConfig):
+    """Create StoreManager with auth based on config."""
+    from cl_client.store_manager import StoreManager
+
+    if not auth_config.username:
+        mgr = StoreManager.guest(base_url=auth_config.store_url)
+        await mgr.__aenter__()
+        yield mgr
+        await mgr.__aexit__(None, None, None)
+        return
+
+    # Username and password are guaranteed to be not None here
+    assert auth_config.username is not None
+    assert auth_config.password is not None
+
+    config = ServerConfig(
+        auth_url=auth_config.auth_url,
+        compute_url=auth_config.compute_url,
+        store_url=auth_config.store_url,
+    )
+    session = SessionManager(server_config=config)
+
+    await session.login(
+        auth_config.username,
+        auth_config.password,
+    )
+
+    mgr = session.create_store_manager()
+    await mgr.__aenter__()
+    mgr._auth_session = session  # type: ignore[attr-defined]
+
+    yield mgr
+
+    await mgr.__aexit__(None, None, None)
+    await session.close()
+
+
+@pytest.fixture
+def is_no_auth(auth_config: AuthConfig) -> bool:
+    """Check if running in no-auth mode."""
+    return not auth_config.username
+
+
+# ============================================================================
+# MEDIA FIXTURES
+# ============================================================================
 
 # Test vectors base directory (can be overridden via environment variable)
 TEST_VECTORS_DIR = Path(
@@ -73,6 +367,11 @@ def test_video_720p(media_dir: Path) -> Path:
     return video_path
 
 
+# ============================================================================
+# CLEANUP FIXTURES
+# ============================================================================
+
+
 @pytest.fixture(scope="module", autouse=True)
 async def cleanup_store_entities(
     request: pytest.FixtureRequest,
@@ -98,8 +397,6 @@ async def cleanup_store_entities(
     user_info = auth_config.user_info
     if not user_info or not user_info.is_admin:
         pytest.skip("Store cleanup requires admin credentials")
-
-    import httpx
 
     store_url = auth_config.store_url
     auth_url = auth_config.auth_url

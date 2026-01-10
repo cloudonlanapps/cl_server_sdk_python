@@ -285,10 +285,13 @@ class TestAuthClientAdminUserManagement:
                     user_create=user_create,
                 )
 
+            # Verify that permissions list is converted to comma-separated string for form data
+            expected_data = user_create.model_dump()
+            expected_data["permissions"] = "read:jobs"  # List becomes comma-separated string
             mock_post.assert_called_once_with(
                 "/users/",
                 headers={"Authorization": "Bearer admin_token"},
-                data=user_create.model_dump(),
+                data=expected_data,
             )
             assert isinstance(result, UserResponse)
             assert result.username == "newuser"
@@ -523,12 +526,12 @@ class TestAuthClientAdminUserManagement:
                     user_update=user_update,
                 )
 
-            # Verify only non-None fields are included
-            expected_data = {"permissions": ["*"], "is_admin": True}
+            # Verify only non-None fields are included, permissions list converted to string
+            expected_data = {"permissions": "*", "is_admin": True}  # List becomes comma-separated string
             mock_put.assert_called_once_with(
                 "/users/2",
                 headers={"Authorization": "Bearer admin_token"},
-                json=expected_data,
+                data=expected_data,
             )
             assert isinstance(result, UserResponse)
             assert result.is_admin is True
@@ -564,9 +567,9 @@ class TestAuthClientAdminUserManagement:
                     user_update=user_update,
                 )
 
-            # Verify only password is included
+            # Verify only password is included (using form data, not json)
             call_args = mock_put.call_args
-            assert call_args[1]["json"] == {"password": "newpassword"}
+            assert call_args[1]["data"] == {"password": "newpassword"}
             assert isinstance(result, UserResponse)
 
     @pytest.mark.asyncio

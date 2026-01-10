@@ -331,7 +331,7 @@ class TestStoreManagerAdminOperations:
     async def test_get_config_success(self, store_manager, mock_store_client):
         """Test getting store configuration."""
         expected_config = StoreConfig(
-            read_auth_enabled=True,
+            guest_mode=False,
             updated_at=1704067200000,
             updated_by="admin",
         )
@@ -348,7 +348,7 @@ class TestStoreManagerAdminOperations:
     async def test_update_read_auth_success(self, store_manager, mock_store_client):
         """Test updating read auth configuration."""
         expected_config = StoreConfig(
-            read_auth_enabled=False,
+            guest_mode=True,
             updated_at=1704153600000,
         )
         mock_store_client.update_read_auth.return_value = expected_config
@@ -356,7 +356,7 @@ class TestStoreManagerAdminOperations:
         result = await store_manager.update_read_auth(enabled=False)
 
         assert result.is_success
-        assert result.data.read_auth_enabled is False
+        assert result.data.guest_mode is True
         assert result.success == "Read authentication configuration updated successfully"
         mock_store_client.update_read_auth.assert_called_once_with(enabled=False)
 

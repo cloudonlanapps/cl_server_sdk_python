@@ -321,7 +321,7 @@ class TestStoreClientAdminOperations:
         """Test getting store configuration."""
         mock_response = Mock()
         mock_response.json.return_value = {
-            "read_auth_enabled": True,
+            "guest_mode": False,
             "updated_at": 1704067200000,
             "updated_by": "admin",
         }
@@ -331,27 +331,34 @@ class TestStoreClientAdminOperations:
         result = await store_client.get_config()
 
         assert isinstance(result, StoreConfig)
-        assert result.read_auth_enabled is True
+        assert result.guest_mode is False
         assert result.updated_by == "admin"
 
     @pytest.mark.asyncio
     async def test_update_read_auth(self, store_client, mock_httpx_client):
         """Test updating read auth configuration."""
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "read_auth_enabled": False,
+        mock_put_response = Mock()
+        mock_put_response.raise_for_status = Mock()
+
+        # Mock GET response for get_config() call after PUT
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = {
+            "guest_mode": True,
             "updated_at": 1704153600000,
         }
-        mock_response.raise_for_status = Mock()
-        mock_httpx_client.put.return_value = mock_response
+        mock_get_response.raise_for_status = Mock()
+
+        mock_httpx_client.put.return_value = mock_put_response
+        mock_httpx_client.get.return_value = mock_get_response
 
         result = await store_client.update_read_auth(enabled=False)
 
-        assert result.read_auth_enabled is False
+        assert result.guest_mode is True
 
-        # Verify multipart form data
+        # Verify multipart form data (update_read_auth calls update_guest_mode)
+        # enabled=False means guest_mode=True
         call_args = mock_httpx_client.put.call_args
-        assert call_args[1]["data"]["enabled"] == "false"
+        assert call_args[1]["data"]["guest_mode"] == "true"
 
 
 class TestStoreClientErrorHandling:

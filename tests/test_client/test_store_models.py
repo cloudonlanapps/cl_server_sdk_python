@@ -160,19 +160,19 @@ class TestStoreConfig:
     def test_store_config_creation(self):
         """Test creating store config."""
         config = StoreConfig(
-            read_auth_enabled=True,
+            guest_mode=False,
             updated_at=1704067200000,
             updated_by="admin",
         )
 
-        assert config.read_auth_enabled is True
+        assert config.guest_mode is False
         assert config.updated_at == 1704067200000
         assert config.updated_by == "admin"
 
     def test_store_config_datetime(self):
         """Test datetime conversion."""
         config = StoreConfig(
-            read_auth_enabled=False,
+            guest_mode=True,
             updated_at=1704067200000,
         )
 
