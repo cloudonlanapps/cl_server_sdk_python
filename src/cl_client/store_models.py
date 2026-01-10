@@ -9,12 +9,8 @@ This module contains Pydantic models for the store service, including:
 """
 
 from datetime import datetime
-from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
-
-
-T = TypeVar("T")
 
 
 class Entity(BaseModel):
@@ -58,9 +54,7 @@ class Entity(BaseModel):
     type: str | None = Field(default=None, description="Media type category (image, video, etc.)")
     extension: str | None = Field(default=None, description="File extension (e.g., jpg, mp4)")
     md5: str | None = Field(default=None, description="MD5 checksum (unique constraint)")
-    file_path: str | None = Field(
-        default=None, description="Relative file path in storage"
-    )
+    file_path: str | None = Field(default=None, description="Relative file path in storage")
 
     @property
     def added_date_datetime(self) -> datetime | None:
@@ -145,7 +139,7 @@ class StoreConfig(BaseModel):
         return datetime.fromtimestamp(self.updated_at / 1000)
 
 
-class StoreOperationResult(BaseModel, Generic[T]):
+class StoreOperationResult[T](BaseModel):
     """Wrapper for store operation results with error handling.
 
     Provides consistent error handling across all store operations, matching
@@ -264,10 +258,8 @@ class FaceResponse(BaseModel):
     known_person_id: int | None = Field(None, description="Known person ID (face recognition)")
 
     @property
-    def created_at_datetime(self) -> datetime | None:
+    def created_at_datetime(self) -> datetime:
         """Convert created_at (milliseconds) to Python datetime."""
-        if self.created_at is None:
-            return None
         return datetime.fromtimestamp(self.created_at / 1000)
 
 
@@ -285,17 +277,13 @@ class EntityJobResponse(BaseModel):
     error_message: str | None = Field(None, description="Error message if failed")
 
     @property
-    def created_at_datetime(self) -> datetime | None:
+    def created_at_datetime(self) -> datetime:
         """Convert created_at (milliseconds) to Python datetime."""
-        if self.created_at is None:
-            return None
         return datetime.fromtimestamp(self.created_at / 1000)
 
     @property
-    def updated_at_datetime(self) -> datetime | None:
+    def updated_at_datetime(self) -> datetime:
         """Convert updated_at (milliseconds) to Python datetime."""
-        if self.updated_at is None:
-            return None
         return datetime.fromtimestamp(self.updated_at / 1000)
 
     @property
@@ -333,17 +321,13 @@ class KnownPersonResponse(BaseModel):
     face_count: int | None = Field(None, description="Number of faces for this person (optional)")
 
     @property
-    def created_at_datetime(self) -> datetime | None:
+    def created_at_datetime(self) -> datetime:
         """Convert created_at (milliseconds) to Python datetime."""
-        if self.created_at is None:
-            return None
         return datetime.fromtimestamp(self.created_at / 1000)
 
     @property
-    def updated_at_datetime(self) -> datetime | None:
+    def updated_at_datetime(self) -> datetime:
         """Convert updated_at (milliseconds) to Python datetime."""
-        if self.updated_at is None:
-            return None
         return datetime.fromtimestamp(self.updated_at / 1000)
 
 
@@ -364,10 +348,8 @@ class FaceMatchResult(BaseModel):
     matched_face: FaceResponse | None = Field(None, description="Matched face details (optional)")
 
     @property
-    def created_at_datetime(self) -> datetime | None:
+    def created_at_datetime(self) -> datetime:
         """Convert created_at (milliseconds) to Python datetime."""
-        if self.created_at is None:
-            return None
         return datetime.fromtimestamp(self.created_at / 1000)
 
 

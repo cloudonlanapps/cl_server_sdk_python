@@ -199,9 +199,7 @@ class AuthClient:
             print(f"Created user: {user.username}")
         """
         # Convert model to form data, converting permissions list to comma-separated string
-        form_data = user_create.model_dump()
-        if "permissions" in form_data and form_data["permissions"]:
-            form_data["permissions"] = ",".join(form_data["permissions"])
+        form_data = user_create.to_api_payload()
 
         response = await self._session.post(
             "/users/",
@@ -317,11 +315,7 @@ class AuthClient:
             print(f"Updated user: {user.username}, Admin: {user.is_admin}")
         """
         # Only include non-None fields for partial updates
-        update_data = user_update.model_dump(exclude_none=True)
-
-        # Convert permissions list to comma-separated string
-        if "permissions" in update_data and update_data["permissions"]:
-            update_data["permissions"] = ",".join(update_data["permissions"])
+        update_data = user_update.to_api_payload()
 
         response = await self._session.put(
             f"/users/{user_id}",
@@ -369,8 +363,6 @@ class AuthClient:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(
-        self, exc_type: object, exc_val: object, exc_tb: object
-    ) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
         await self.close()

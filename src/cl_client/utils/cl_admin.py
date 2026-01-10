@@ -40,19 +40,21 @@ Usage:
 
 import asyncio
 import sys
-from typing import Any, Optional
+from typing import Any, cast
 
 import click
 import httpx
 from pydantic import BaseModel
+
+from cl_client.auth import JWTAuthProvider
 from cl_client.auth_client import AuthClient
 from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
 from cl_client.store_client import StoreClient
-from cl_client.auth import JWTAuthProvider
 
 
 class ServerRootResponse(BaseModel):
     """Server root endpoint response."""
+
     status: str
     service: str
     version: str
@@ -61,16 +63,12 @@ class ServerRootResponse(BaseModel):
 
 class CliContext(BaseModel):
     """CLI context object for passing data between commands."""
+
     auth_url: str
     username: str
     password: str
     store_url: str | None = None
     compute_url: str | None = None
-
-    @classmethod
-    def from_click_context(cls, ctx: click.Context) -> "CliContext":
-        """Parse Click context object into Pydantic model."""
-        return cls.model_validate(ctx.obj)
 
 
 @click.group()
@@ -78,12 +76,19 @@ class CliContext(BaseModel):
 @click.option("--username", required=True, help="Admin username")
 @click.option("--password", required=True, help="Admin password")
 @click.pass_context
-def cli(ctx: click.Context, auth_url: str, username: str, password: str) -> None:
+def cli(
+    ctx: click.Context,
+    auth_url: str,
+    username: str,
+    password: str,
+) -> None:
     """CoLAN server administration CLI."""
-    ctx.ensure_object(dict)
-    ctx.obj["auth_url"] = auth_url
-    ctx.obj["username"] = username
-    ctx.obj["password"] = password
+
+    ctx.obj = CliContext(
+        auth_url=auth_url,
+        username=username,
+        password=password,
+    )
 
 
 @cli.group()
@@ -93,10 +98,9 @@ def users() -> None:
 
 
 @users.command("list")
-@click.pass_context
-def users_list(ctx: click.Context) -> None:
+@click.pass_obj
+def users_list(cli_ctx: CliContext) -> None:
     """List all users."""
-    cli_ctx = CliContext.from_click_context(ctx)
     asyncio.run(_list_users(cli_ctx.auth_url, cli_ctx.username, cli_ctx.password))
 
 
@@ -105,20 +109,23 @@ def users_list(ctx: click.Context) -> None:
 @click.option("--password", "new_password", required=True, help="New user password")
 @click.option("--permissions", default="", help="Comma-separated permissions")
 @click.option("--admin", is_flag=True, help="Grant admin privileges")
-@click.pass_context
-def users_create(ctx: click.Context, new_username: str, new_password: str, permissions: str, admin: bool) -> None:
+@click.pass_obj
+def users_create(
+    cli_ctx: CliContext, new_username: str, new_password: str, permissions: str, admin: bool
+) -> None:
     """Create a new user."""
-    cli_ctx = CliContext.from_click_context(ctx)
     perms = [p.strip() for p in permissions.split(",") if p.strip()]
-    asyncio.run(_create_user(
-        cli_ctx.auth_url,
-        cli_ctx.username,
-        cli_ctx.password,
-        new_username,
-        new_password,
-        perms,
-        admin
-    ))
+    asyncio.run(
+        _create_user(
+            cli_ctx.auth_url,
+            cli_ctx.username,
+            cli_ctx.password,
+            new_username,
+            new_password,
+            perms,
+            admin,
+        )
+    )
 
 
 @users.command("update")
@@ -126,48 +133,63 @@ def users_create(ctx: click.Context, new_username: str, new_password: str, permi
 @click.option("--password", "new_password", help="New password")
 @click.option("--permissions", help="Comma-separated permissions")
 @click.option("--admin", type=bool, help="Set admin status (true/false)")
-@click.pass_context
-def users_update(ctx: click.Context, target_username: str, new_password: Optional[str],
-                 permissions: Optional[str], admin: Optional[bool]) -> None:
+@click.pass_obj
+def users_update(
+    cli_ctx: CliContext,
+    target_username: str,
+    new_password: str | None,
+    permissions: str | None,
+    admin: bool | None,
+) -> None:
     """Update user details."""
-    cli_ctx = CliContext.from_click_context(ctx)
     perms = [p.strip() for p in permissions.split(",") if p.strip()] if permissions else None
-    asyncio.run(_update_user(
-        cli_ctx.auth_url,
-        cli_ctx.username,
-        cli_ctx.password,
-        target_username,
-        new_password,
-        perms,
-        admin
-    ))
+    asyncio.run(
+        _update_user(
+            cli_ctx.auth_url,
+            cli_ctx.username,
+            cli_ctx.password,
+            target_username,
+            new_password,
+            perms,
+            admin,
+        )
+    )
 
 
 @users.command("delete")
 @click.argument("target_username")
-@click.pass_context
-def users_delete(ctx: click.Context, target_username: str) -> None:
+@click.pass_obj
+def users_delete(cli_ctx: CliContext, target_username: str) -> None:
     """Delete a user."""
-    cli_ctx = CliContext.from_click_context(ctx)
     asyncio.run(_delete_user(cli_ctx.auth_url, cli_ctx.username, cli_ctx.password, target_username))
 
 
 @cli.group()
 @click.option("--store-url", help="Store service URL")
 @click.option("--compute-url", help="Compute service URL")
-@click.pass_context
-def config(ctx: click.Context, store_url: Optional[str], compute_url: Optional[str]) -> None:
+@click.pass_obj
+def config(
+    cli_ctx: CliContext,
+    store_url: str | None,
+    compute_url: str | None,
+) -> None:
     """Server configuration commands."""
-    ctx.obj["store_url"] = store_url
-    ctx.obj["compute_url"] = compute_url
+
+    if store_url is not None:
+        cli_ctx.store_url = store_url
+
+    if compute_url is not None:
+        cli_ctx.compute_url = compute_url
 
 
 @config.command("get-guest-mode")
-@click.option("--service", type=click.Choice(["store", "compute"]), required=True, help="Service to query")
-@click.pass_context
-def get_guest_mode(ctx: click.Context, service: str) -> None:
+@click.option(
+    "--service", type=click.Choice(["store", "compute"]), required=True, help="Service to query"
+)
+@click.pass_obj
+def get_guest_mode(cli_ctx: CliContext, service: str) -> None:
     """Get current guest mode status."""
-    cli_ctx = CliContext.from_click_context(ctx)
+
     if service == "store":
         if not cli_ctx.store_url:
             click.echo("Error: --store-url required for store service", err=True)
@@ -183,37 +205,34 @@ def get_guest_mode(ctx: click.Context, service: str) -> None:
 @config.command("set-guest-mode")
 @click.argument("service", type=click.Choice(["store", "compute"]))
 @click.argument("mode", type=click.Choice(["on", "off"]))
-@click.pass_context
-def set_guest_mode(ctx: click.Context, service: str, mode: str) -> None:
+@click.pass_obj
+def set_guest_mode(cli_ctx: CliContext, service: str, mode: str) -> None:
     """Enable or disable guest mode for a service."""
-    cli_ctx = CliContext.from_click_context(ctx)
-    enabled = (mode == "on")
+
+    enabled = mode == "on"
 
     if service == "store":
         if not cli_ctx.store_url:
             click.echo("Error: --store-url required for store service", err=True)
             sys.exit(1)
-        asyncio.run(_set_guest_mode_store(
-            cli_ctx.auth_url,
-            cli_ctx.store_url,
-            cli_ctx.username,
-            cli_ctx.password,
-            enabled
-        ))
+        asyncio.run(
+            _set_guest_mode_store(
+                cli_ctx.auth_url, cli_ctx.store_url, cli_ctx.username, cli_ctx.password, enabled
+            )
+        )
     else:  # compute
         if not cli_ctx.compute_url:
             click.echo("Error: --compute-url required for compute service", err=True)
             sys.exit(1)
-        asyncio.run(_set_guest_mode_compute(
-            cli_ctx.auth_url,
-            cli_ctx.compute_url,
-            cli_ctx.username,
-            cli_ctx.password,
-            enabled
-        ))
+        asyncio.run(
+            _set_guest_mode_compute(
+                cli_ctx.auth_url, cli_ctx.compute_url, cli_ctx.username, cli_ctx.password, enabled
+            )
+        )
 
 
 # Async implementation functions
+
 
 async def _list_users(auth_url: str, username: str, password: str) -> None:
     """List all users in the system."""
@@ -225,11 +244,20 @@ async def _list_users(auth_url: str, username: str, password: str) -> None:
         click.echo("-" * 80)
         for user in users:
             perms = ",".join(user.permissions) if user.permissions else "-"
-            click.echo(f"{user.id:<6} {user.username:<20} {str(user.is_admin):<8} {str(user.is_active):<8} {perms}")
+            click.echo(
+                f"{user.id:<6} {user.username:<20} {str(user.is_admin):<8} {str(user.is_active):<8} {perms}"
+            )
 
 
-async def _create_user(auth_url: str, admin_username: str, admin_password: str,
-                       new_username: str, new_password: str, permissions: list[str], is_admin: bool) -> None:
+async def _create_user(
+    auth_url: str,
+    admin_username: str,
+    admin_password: str,
+    new_username: str,
+    new_password: str,
+    permissions: list[str],
+    is_admin: bool,
+) -> None:
     """Create a new user."""
     async with AuthClient(base_url=auth_url) as client:
         token_resp = await client.login(admin_username, admin_password)
@@ -250,9 +278,15 @@ async def _create_user(auth_url: str, admin_username: str, admin_password: str,
             click.echo("  Admin: Yes")
 
 
-async def _update_user(auth_url: str, admin_username: str, admin_password: str,
-                       target_username: str, new_password: Optional[str],
-                       permissions: Optional[list[str]], is_admin: Optional[bool]) -> None:
+async def _update_user(
+    auth_url: str,
+    admin_username: str,
+    admin_password: str,
+    target_username: str,
+    new_password: str | None,
+    permissions: list[str] | None,
+    is_admin: bool | None,
+) -> None:
     """Update user details."""
     async with AuthClient(base_url=auth_url) as client:
         token_resp = await client.login(admin_username, admin_password)
@@ -275,8 +309,9 @@ async def _update_user(auth_url: str, admin_username: str, admin_password: str,
         click.echo(f"✓ Updated user: {user.username}")
 
 
-async def _delete_user(auth_url: str, admin_username: str, admin_password: str,
-                       target_username: str) -> None:
+async def _delete_user(
+    auth_url: str, admin_username: str, admin_password: str, target_username: str
+) -> None:
     """Delete a user."""
     async with AuthClient(base_url=auth_url) as client:
         token_resp = await client.login(admin_username, admin_password)
@@ -304,13 +339,16 @@ async def _get_guest_mode_compute(compute_url: str) -> None:
     """Get compute guest mode status."""
     async with httpx.AsyncClient() as client:
         r = await client.get(compute_url)
-        info_raw: Any = r.json()
+        r.raise_for_status()
+        info_raw = cast(dict[str, Any], r.json())
         info = ServerRootResponse.model_validate(info_raw)
         status = "ENABLED" if info.guestMode == "on" else "DISABLED"
         click.echo(f"Compute guest mode: {status}")
 
 
-async def _set_guest_mode_store(auth_url: str, store_url: str, username: str, password: str, enabled: bool) -> None:
+async def _set_guest_mode_store(
+    auth_url: str, store_url: str, username: str, password: str, enabled: bool
+) -> None:
     """Enable or disable store guest mode."""
     async with AuthClient(base_url=auth_url) as auth_client:
         token_resp = await auth_client.login(username, password)
@@ -322,7 +360,9 @@ async def _set_guest_mode_store(auth_url: str, store_url: str, username: str, pa
             click.echo(f"✓ Store guest mode {status}")
 
 
-async def _set_guest_mode_compute(auth_url: str, compute_url: str, username: str, password: str, enabled: bool) -> None:
+async def _set_guest_mode_compute(
+    auth_url: str, compute_url: str, username: str, password: str, enabled: bool
+) -> None:
     """Enable or disable compute guest mode."""
     # Note: Implementation depends on compute service API
     # This is a placeholder - adjust based on actual compute service API

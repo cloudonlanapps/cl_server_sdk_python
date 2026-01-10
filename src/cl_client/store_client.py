@@ -73,9 +73,7 @@ class StoreClient:
         self._client = httpx.AsyncClient(timeout=self._timeout)
         return self
 
-    async def __aexit__(
-        self, exc_type: object, exc_val: object, exc_tb: object
-    ) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
         if self._client:
             await self._client.aclose()
@@ -511,7 +509,7 @@ class StoreClient:
         response.raise_for_status()
         return StoreConfig.model_validate(response.json())
 
-    async def update_guest_mode(self, guest_mode: bool) -> dict[str, bool | str]:
+    async def update_guest_mode(self, guest_mode: bool) -> bool:
         """Update guest mode configuration (admin only).
 
         Note: Uses multipart/form-data, NOT JSON.
@@ -538,7 +536,7 @@ class StoreClient:
             headers=self._get_headers(),
         )
         response.raise_for_status()
-        return response.json()  # type: ignore[return-value]
+        return True
 
     async def update_read_auth(self, enabled: bool) -> StoreConfig:
         """Update read authentication configuration (admin only).
@@ -559,7 +557,7 @@ class StoreClient:
         """
         # Convert enabled to guest_mode (inverted logic)
         guest_mode = not enabled
-        result = await self.update_guest_mode(guest_mode)
+        _ = await self.update_guest_mode(guest_mode)
         # Get updated config to return StoreConfig
         return await self.get_config()
 
@@ -688,9 +686,7 @@ class StoreClient:
         faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
         return [FaceResponse.model_validate(f) for f in faces_data]
 
-    async def update_known_person_name(
-        self, person_id: int, name: str
-    ) -> KnownPersonResponse:
+    async def update_known_person_name(self, person_id: int, name: str) -> KnownPersonResponse:
         """Update the name of a known person.
 
         Args:

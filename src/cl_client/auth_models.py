@@ -8,7 +8,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # ============================================================================
 # Token Models
 # ============================================================================
@@ -38,9 +37,7 @@ class PublicKeyResponse(BaseModel):
         }
     """
 
-    public_key: str = Field(
-        ..., description="Public key for token verification (PEM format)"
-    )
+    public_key: str = Field(..., description="Public key for token verification (PEM format)")
     algorithm: str = Field(..., description="JWT algorithm (ES256)")
 
 
@@ -70,9 +67,7 @@ class UserResponse(BaseModel):
     is_admin: bool = Field(False, description="Whether user has admin privileges")
     is_active: bool = Field(True, description="Whether user account is active")
     created_at: datetime = Field(..., description="Account creation timestamp")
-    permissions: list[str] = Field(
-        default_factory=list, description="User permissions"
-    )
+    permissions: list[str] = Field(default_factory=list, description="User permissions")
 
 
 class UserCreateRequest(BaseModel):
@@ -95,9 +90,12 @@ class UserCreateRequest(BaseModel):
     password: str = Field(..., description="User password (will be hashed)")
     is_admin: bool = Field(False, description="Grant admin privileges")
     is_active: bool = Field(True, description="Set account active status")
-    permissions: list[str] = Field(
-        default_factory=list, description="Initial permissions"
-    )
+    permissions: list[str] = Field(default_factory=list, description="Initial permissions")
+
+    def to_api_payload(self) -> dict[str, str | bool]:
+        data = self.model_dump(exclude_none=True)
+        data["permissions"] = ",".join(self.permissions)
+        return data
 
 
 class UserUpdateRequest(BaseModel):
@@ -115,8 +113,14 @@ class UserUpdateRequest(BaseModel):
     """
 
     password: str | None = Field(None, description="New password (optional)")
-    permissions: list[str] | None = Field(
-        None, description="Update permissions (optional)"
-    )
+    permissions: list[str] | None = Field(None, description="Update permissions (optional)")
     is_active: bool | None = Field(None, description="Update active status (optional)")
     is_admin: bool | None = Field(None, description="Update admin status (optional)")
+
+    def to_api_payload(self) -> dict[str, str | bool]:
+        data = self.model_dump(exclude_none=True)
+
+        if self.permissions is not None:
+            data["permissions"] = ",".join(self.permissions)
+
+        return data
