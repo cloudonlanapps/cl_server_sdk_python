@@ -1,348 +1,424 @@
-# CL Client - Testing Guide
+# Tests — CL Client SDK
 
-## Prerequisites
+Comprehensive guide to the test suite. For quick commands, see [QUICK.md](QUICK.md).
 
-- Python 3.12+
-- uv package manager
-- Running compute server
-- Running auth server (for authentication tests)
-- Running workers with required capabilities
-- Test media files (see [media/MEDIA_SETUP.md](./media/MEDIA_SETUP.md))
+## Overview & Structure
 
-## Multi-Mode Authentication Testing
+The test suite is organized into two categories:
 
-The test suite supports running tests in multiple authentication modes to ensure the SDK works correctly with different permission levels. This validates both positive (authorized) and negative (unauthorized) scenarios.
+- **Unit tests** (`test_client/`) — Test the SDK client APIs, models, and configuration. No external services required.
+- **Integration tests** (`test_integration/`) — Test plugins and store operations with live servers, workers, and MQTT.
 
-### Authentication Modes
+## Test Organization
 
-Tests can run in four modes:
+### Unit Tests (`test_client/`)
 
-1. **admin** - User with admin privileges (can perform all operations)
-2. **user-with-permission** - User with `ai_inference_support` permission (can use plugins)
-3. **user-no-permission** - User without permissions (cannot use plugins)
-4. **no-auth** - No authentication (only works if server has `AUTH_DISABLED=true`)
+Run locally with no external dependencies:
 
-Additionally, there's an **auto** mode that detects the server's configuration and selects an appropriate mode automatically.
+```
+test_auth.py                     # Auth providers (JWT, NoAuth, default)
+test_auth_client.py              # AuthClient API (login, register, permissions)
+test_auth_models.py              # Auth response models and serialization
+test_compute_client.py           # ComputeClient API (job submission, polling, callbacks)
+test_config.py                   # ServerConfig and SessionManager configuration
+test_exceptions.py               # SDK exception types and error handling
+test_models.py                   # Job, Task, and capability models
+test_mqtt_monitor.py             # MQTT connection and callback routing
+test_plugins.py                  # Plugin client factories (clip_embedding, exif, etc.)
+test_server_config.py            # ServerConfig and credential management
+test_session_manager.py          # SessionManager (login, logout, token refresh)
+test_store_client.py             # StoreClient API (entity CRUD, versioning)
+test_store_manager.py            # StoreManager (context manager, authentication)
+test_store_models.py             # Store entity models and metadata
+```
 
-### Running Tests in Different Modes
+Run unit tests:
 
 ```bash
-# Auto-detect mode based on server configuration (default)
-uv run pytest tests/test_integration/ --auth-mode=auto
-
-# Run in admin mode
-uv run pytest tests/test_integration/ --auth-mode=admin
-
-# Run in user-with-permission mode
-uv run pytest tests/test_integration/ --auth-mode=user-with-permission
-
-# Run in user-no-permission mode (tests expect 403 errors)
-uv run pytest tests/test_integration/ --auth-mode=user-no-permission
-
-# Run in no-auth mode (requires AUTH_DISABLED=true on server)
-uv run pytest tests/test_integration/ --auth-mode=no-auth
+uv run pytest -m "not integration" --no-cov
 ```
 
-### Test Configuration
+### Integration Tests (`test_integration/`)
 
-#### auth_config.json
+Test the SDK against running servers, workers, and MQTT broker. **Servers must be started first.**
 
-Test user configuration is stored in `tests/auth_config.json`:
+#### Plugin Tests (9 files)
 
-```json
-{
-  "default_auth_mode": "user-with-permission",
-  "auth_url": "http://localhost:8000",
-  "compute_url": "http://localhost:8002",
-  "test_users": {
-    "admin": {
-      "username": "admin",
-      "is_admin": true,
-      "permissions": []
-    },
-    "user-with-permission": {
-      "username": "test_user_perm",
-      "password": "user123",
-      "is_admin": false,
-      "permissions": ["ai_inference_support"]
-    },
-    "user-no-permission": {
-      "username": "test_user_noperm",
-      "password": "user456",
-      "is_admin": false,
-      "permissions": []
-    }
-  }
-}
+Each plugin test validates two execution workflows:
+
+1. **HTTP Polling** — Submit job, wait via HTTP polling
+2. **MQTT Callbacks** — Submit job with on_progress/on_complete callbacks via MQTT
+
+Example: `test_clip_embedding_integration.py`
+- `test_clip_embedding_http_polling()` — Standard wait-for-completion flow
+- `test_clip_embedding_mqtt_callbacks()` — Real-time MQTT callbacks + job fetch
+- Tests run in all auth modes; conditionally assert success/failure
+
+Other plugin tests follow the same pattern:
+- `test_dino_embedding_integration.py` — Vision transformer embeddings
+- `test_exif_integration.py` — EXIF metadata extraction
+- `test_face_detection_integration.py` — Face detection in images
+- `test_face_embedding_integration.py` — Face embeddings + matching
+- `test_hash_integration.py` — Perceptual image hashing
+- `test_hls_streaming_integration.py` — HLS streaming setup
+- `test_image_conversion_integration.py` — Format/resolution conversion
+- `test_media_thumbnail_integration.py` — Thumbnail generation
+
+#### Store Tests
+
+`test_store_integration.py` — Entity CRUD, versioning, and auth modes:
+- List/create/read/update/patch/delete entities
+- Soft deletes and version history
+- Admin operations (config, read auth settings)
+
+#### Auth Tests
+
+`test_auth_errors_integration.py` — Server auth behavior:
+- Unauthenticated requests (401/403 vs guest mode 200)
+- Insufficient permissions (403)
+- Admin-only operations
+- Expected HTTP status codes in each auth mode
+
+`test_user_management_integration.py` — User and permission management:
+- Admin can create/delete/update users
+- Permission assignment and validation
+- Admin-only operations
+
+---
+
+## Worker Requirements
+
+Integration tests require **workers with specific capabilities**. Each capability is a task type the worker can execute.
+
+### Required Capabilities
+
+```
+clip_embedding          CLIP vision model embeddings (512-dim)
+dino_embedding          DINOv2 vision model embeddings
+exif                    EXIF metadata extraction from JPEG
+face_detection          Face detection bounding boxes
+face_embedding          Face embeddings + similarity matching
+hash                    Perceptual image hashing (pHash, etc.)
+hls_streaming           HTTP Live Streaming setup
+image_conversion        Format/resolution conversion
+media_thumbnail         Thumbnail generation
 ```
 
-**Note:** Admin password is NOT stored in the config file - it must be provided via environment variable.
+### Starting Workers
 
-#### Environment Variables
+Workers are started as part of server launching process.
 
-```bash
-# REQUIRED for auth mode tests
-export TEST_ADMIN_PASSWORD="your_admin_password"
+## Conditional Test Assertions
 
-# Optional - override server URLs
-export AUTH_URL="http://localhost:8000"
-export COMPUTE_URL="http://localhost:8002"
-```
+Integration tests adapt behavior based on **auth mode** (determined at runtime from server config and CLI args).
 
-### Test Behavior by Mode
+### Auth Modes
 
-| Mode | Plugin Operations | Admin Operations | Server Requirements |
-|------|------------------|------------------|---------------------|
-| admin | ✅ Pass | ✅ Pass | auth_required=true |
-| user-with-permission | ✅ Pass | ❌ 403 Forbidden | auth_required=true |
-| user-no-permission | ❌ 403 Forbidden | ❌ 403 Forbidden | auth_required=true |
-| no-auth | ❌ 401 Unauthorized | ⏭️ Skipped | auth_required=true |
-| no-auth | ✅ Pass | ⏭️ Skipped | auth_required=false |
+| Mode | Description | Requirements |
+|------|-------------|--------------|
+| **auth** | Authenticated via username/password | `--username` and `--password` provided |
+| **no-auth** | No authentication | No credentials provided |
 
-### Test User Management
+### Permission Model
 
-Test users are automatically managed by the test suite:
+Within "auth" mode, tests check **user permissions**:
 
-- **Auto-creation**: If a test user doesn't exist, it will be created automatically
-- **Validation**: If a test user exists, credentials are validated by attempting login
-- **Permission sync**: Created users have permissions matching `auth_config.json`
+- **admin** — Full access (all operations succeed)
+- **media_store_read** — Can read from store
+- **media_store_write** — Can write to store
+- **ai_inference_support** — Can use plugins (clip, dino, etc.)
 
-To reset test users:
-```bash
-# Delete test users via auth service admin API, they will be recreated on next test run
-```
+### How Tests Use Conditional Logic
 
-### Conditional Test Assertions
-
-Integration tests use conditional assertions to handle different auth modes:
+Each test checks the auth config and branches:
 
 ```python
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_clip_embedding_http_polling(
-    test_image: Path, client: ComputeClient, auth_config: dict[str, Any]
-):
+async def test_clip_embedding_http_polling(test_image: Path, client: ComputeClient, auth_config: AuthConfig):
     """Test CLIP embedding with HTTP polling."""
+    
+    # Branch based on whether this operation should succeed
     if should_succeed(auth_config, operation_type="plugin"):
-        # Should succeed - run normal assertions
-        job = await client.clip_embedding.embed_image(
-            image=test_image,
-            wait=True,
-            timeout=30.0,
-        )
+        # Expected success path
+        job = await client.clip_embedding.embed_image(image=test_image, wait=True, timeout=30.0)
         assert job.status == "completed"
         assert job.task_output is not None
         await client.delete_job(job.job_id)
     else:
-        # Should fail - expect auth error
+        # Expected failure path — expect specific HTTP error
         expected_code = get_expected_error(auth_config, operation_type="plugin")
         with pytest.raises(HTTPStatusError) as exc_info:
-            await client.clip_embedding.embed_image(
-                image=test_image,
-                wait=True,
-                timeout=30.0,
-            )
-        assert exc_info.value.response.status_code == expected_code
+            await client.clip_embedding.embed_image(image=test_image, wait=True, timeout=30.0)
+        assert exc_info.value.response.status_code == expected_code  # 401 or 403
 ```
 
 ### Helper Functions
 
-The `conftest.py` module provides helpers for conditional test logic:
+`should_succeed(auth_config, operation_type) -> bool`
+- Returns `True` if the operation should succeed for this auth config
+- `operation_type`: `"plugin"`, `"store_read"`, `"store_write"`, or `"admin"`
 
-#### `should_succeed(auth_config, operation_type)`
+`get_expected_error(auth_config, operation_type) -> int`
+- Returns expected HTTP error code (401 Unauthorized or 403 Forbidden)
+- Only called when `should_succeed()` returns `False`
 
-Determines if an operation should succeed based on auth configuration.
-
-```python
-# For plugin operations (requires ai_inference_support permission)
-if should_succeed(auth_config, operation_type="plugin"):
-    # Run test normally
-
-# For admin operations (requires is_admin=True)
-if should_succeed(auth_config, operation_type="admin"):
-    # Run admin test normally
-```
-
-#### `get_expected_error(auth_config, operation_type)`
-
-Returns expected HTTP error code for failed operations.
+### Example: Store Write in No-Auth Mode
 
 ```python
-expected_code = get_expected_error(auth_config, operation_type="plugin")
-# Returns:
-# - 401 if no credentials (no-auth mode with auth required)
-# - 403 if insufficient permissions
-# - None if operation should succeed
+if should_succeed(auth_config, operation_type="store_write"):
+    # Auth mode: write succeeds (user has permission)
+    await store_manager.create_entity(...)
+else:
+    # No-auth mode: write fails with 401 (no token provided)
+    expected_code = get_expected_error(auth_config, operation_type="store_write")
+    with pytest.raises(HTTPStatusError) as exc_info:
+        await store_manager.create_entity(...)
+    assert exc_info.value.response.status_code == expected_code
 ```
+
+---
+
+## Execution Workflows
+
+### HTTP Polling (Secondary Workflow)
+
+Submit job and poll for completion via HTTP:
+
+```python
+job = await client.clip_embedding.embed_image(image=test_image, wait=True, timeout=30.0)
+assert job.status == "completed"
+await client.delete_job(job.job_id)
+```
+
+**When to use:** Simpler flow, works without MQTT.
+
+### MQTT Callbacks (Primary Workflow)
+
+Submit job with callbacks; server pushes updates via MQTT:
+
+```python
+completion_event = asyncio.Event()
+final_job = None
+
+def on_complete(job):
+    global final_job
+    final_job = job
+    completion_event.set()
+
+job = await client.clip_embedding.embed_image(
+    image=test_image,
+    on_progress=lambda j: print(f"Progress: {j.progress}%"),
+    on_complete=on_complete
+)
+
+# Wait for MQTT callback
+await asyncio.wait_for(completion_event.wait(), timeout=30.0)
+assert final_job.status == "completed"
+```
+
+**When to use:** Real-time updates, testing callback infrastructure, production use case.
+
+### Workflow Tests (Multi-Plugin)
+
+Tests can combine multiple plugins in parallel:
+
+```python
+# Register callbacks upfront
+events = {"clip": asyncio.Event(), "dino": asyncio.Event()}
+results = {}
+
+def make_callback(name):
+    def on_complete(job):
+        results[name] = job
+        events[name].set()
+    return on_complete
+
+# Submit all jobs (non-blocking)
+job1 = await client.clip_embedding.embed_image(..., on_complete=make_callback("clip"))
+job2 = await client.dino_embedding.embed_image(..., on_complete=make_callback("dino"))
+
+# Wait for all completions
+await asyncio.gather(events["clip"].wait(), events["dino"].wait())
+
+# Verify results
+assert results["clip"].status == "completed"
+assert results["dino"].status == "completed"
+```
+
+---
+
+## Code Coverage
+
+The SDK requires **≥90% code coverage** on all public APIs.
+
+### Coverage Configuration
+
+Coverage rules in `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+source = ["src/cl_client"]
+omit = ["*/tests/*", "*/__pycache__/*", "*/venv/*", "*/.venv/*"]
+
+[tool.coverage.report]
+precision = 2
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+```
+
+### Current Coverage
+
+Run with coverage:
+
+```bash
+uv run pytest --cov=cl_client --cov-report=html --cov-report=term-missing
+```
+
+Output:
+- **Terminal:** Line-by-line coverage summary (lines marked with `?` are uncovered)
+- **HTML:** `htmlcov/index.html` — Interactive coverage report
+
+### What Must Be Tested
+
+- ✅ All public methods and properties
+- ✅ Happy path + error paths
+- ✅ Both HTTP polling and MQTT callback workflows
+- ✅ Auth modes (success + failure scenarios)
+- ✅ Store operations (read/write/admin)
+- ✅ Session management and token refresh
+
+---
+
+## Starting Servers
+
+**Required before running integration tests.**
+
+Refer cl_server project (workspace) on how to launch servers / services.
+
+---
 
 ## Running Tests
 
-```bash
-# Run all tests
-uv run pytest
+### Quick Reference
 
-# Run with coverage
-uv run pytest --cov=cl_client --cov-report=html
-
-# Run specific test file
-uv run pytest tests/test_plugins/test_clip_embedding.py
-
-# Run only unit tests (skip integration)
-uv run pytest -m "not integration"
-```
-
-## Test Organization
-
-```
-tests/
-├── conftest.py              # Shared fixtures
-├── test_client/             # Unit tests
-│   ├── test_config.py
-│   ├── test_compute_client.py
-│   ├── test_auth.py
-│   ├── test_mqtt_monitor.py
-│   ├── test_models.py
-│   └── test_cli.py
-├── test_plugins/            # Plugin integration tests (9 files)
-│   ├── test_clip_embedding.py
-│   ├── test_dino_embedding.py
-│   └── ...
-├── test_workflows/          # Multi-plugin workflows
-│   ├── test_image_processing_workflow.py
-│   └── test_video_processing_workflow.py
-└── media/
-    └── MEDIA_SETUP.md       # Test media setup guide
-```
-
-## Worker Requirements
-
-Tests validate worker availability before running. Required capabilities:
-
-- `clip_embedding`
-- `dino_embedding`
-- `exif`
-- `face_detection`
-- `face_embedding`
-- `hash`
-- `hls_streaming`
-- `image_conversion`
-- `media_thumbnail`
-
-Start workers:
+### Unit Tests Only (Fast, No Servers)
 
 ```bash
-# Start worker with specific capability
-uv run compute-worker --tasks clip_embedding
-
-# Or start with all capabilities
-uv run compute-worker
+uv run pytest -m "not integration" --no-cov
 ```
 
-## Test Media Setup
+### Integration Tests (Requires Servers)
 
-See [media/MEDIA_SETUP.md](./media/MEDIA_SETUP.md) for detailed instructions on obtaining and setting up test media files.
+Ensure servers are running first (see "Starting Servers" section above).
 
-## Coverage Requirements
-
-- Minimum coverage: **90%**
-- All public APIs must be tested
-- Both MQTT callback and HTTP polling workflows tested
-
-## Test Patterns
-
-### Plugin Tests
-
-Each plugin test includes:
-
-1. Worker capability validation
-2. MQTT callback test (primary workflow)
-3. HTTP polling test (secondary workflow)
-4. Job cleanup verification
-
-Example:
-
-```python
-@pytest.mark.asyncio
-async def test_embed_image_mqtt_callback(client, test_image_hd, validate_workers):
-    # Validate worker available
-    await validate_workers(client, ["clip_embedding"])
-
-    # Track completion via callback
-    completed_job = None
-    event = asyncio.Event()
-
-    def on_complete(job):
-        nonlocal completed_job
-        completed_job = job
-        event.set()
-
-    # Submit job
-    job = await client.clip_embedding.embed_image(
-        image=test_image_hd,
-        on_complete=on_complete
-    )
-
-    # Wait for callback
-    await asyncio.wait_for(event.wait(), timeout=30.0)
-
-    # Verify and cleanup
-    assert completed_job.status == "completed"
-    await client.delete_job(job.job_id)
+```bash
+uv run pytest -m "integration" \
+  --auth-url=http://localhost:8010 \
+  --compute-url=http://localhost:8012 \
+  --store-url=http://localhost:8011 \
+  --username=admin \
+  --password=admin \
+  --no-cov
 ```
 
-### Workflow Tests
+### All Tests with Coverage
 
-Parallel MQTT pattern:
-
-```python
-async def test_complete_image_analysis(client, test_image, validate_workers):
-    # Validate all required workers
-    await validate_workers(client, ["exif", "media_thumbnail", "clip_embedding"])
-
-    # Register ALL callbacks upfront
-    completed_jobs = {}
-    events = {name: asyncio.Event() for name in ["exif", "thumb", "clip"]}
-
-    def make_callback(name):
-        def on_complete(job):
-            completed_jobs[name] = job
-            events[name].set()
-        return on_complete
-
-    # Submit ALL jobs with callbacks (non-blocking)
-    job1 = await client.exif.extract(image=test_image, on_complete=make_callback("exif"))
-    job2 = await client.media_thumbnail.generate(..., on_complete=make_callback("thumb"))
-    job3 = await client.clip_embedding.embed_image(..., on_complete=make_callback("clip"))
-
-    # Wait for ALL callbacks
-    await asyncio.gather(
-        events["exif"].wait(),
-        events["thumb"].wait(),
-        events["clip"].wait()
-    )
-
-    # Verify all completed
-    assert all(j.status == "completed" for j in completed_jobs.values())
-
-    # Cleanup
-    for job in [job1, job2, job3]:
-        await client.delete_job(job.job_id)
+```bash
+uv run pytest tests/ \
+  --auth-url=http://localhost:8010 \
+  --compute-url=http://localhost:8012 \
+  --store-url=http://localhost:8011 \
+  --username=admin \
+  --password=admin
 ```
+
+(Coverage report auto-generated to `htmlcov/index.html`)
+
+### Run Specific Test File
+
+```bash
+uv run pytest tests/test_client/test_auth.py -v
+uv run pytest tests/test_integration/test_clip_embedding_integration.py -v
+```
+
+### Run Tests Matching Pattern
+
+```bash
+# All auth-related tests
+uv run pytest -k "auth" -v
+
+# All plugin tests
+uv run pytest -k "embedding or face or hash" -v
+```
+
+---
+
+## Test Media
+
+Integration tests require **test media files** (images, videos):
+
+- Images: `test_image_1920x1080.jpg`, `test_exif_rich.jpg`, `test_face_single.jpg`, etc.
+- Videos: `test_video_1080p_10s.mp4`, `test_video_720p_5s.mp4`
+
+**Location:** `TEST_VECTORS_DIR` environment variable (defaults to `/Users/anandasarangaram/Work/cl_server_test_media`)
+
+If media not found, integration tests fail with:
+```
+AssertionError: Test image not found: /path/to/test_image_1920x1080.jpg
+```
+
+To use custom media location:
+
+```bash
+export TEST_VECTORS_DIR=/path/to/test/media
+uv run pytest -m "integration" ...
+```
+
+---
 
 ## Troubleshooting
 
+### Integration Tests Fail: "Cannot connect to server"
+
+Servers not running. Start them
+
 ### Tests Fail: "Worker unavailable"
 
-Start required workers before running tests.
+No workers with required capabilities running. Start at least one with required capabilities
 
-### Tests Fail: "Media not found"
 
-Set up test media directory (see media/MEDIA_SETUP.md).
+### Tests Fail: "Test image not found"
+
+Test media directory not found. Set `TEST_VECTORS_DIR`:
+
+```bash
+export TEST_VECTORS_DIR=/path/to/test/media
+```
 
 ### Type Errors
 
-Run basedpyright to catch issues:
+Run strict type checker to catch issues:
 
 ```bash
 uv run basedpyright
 ```
+
+### Coverage Below 90%
+
+Identify uncovered lines:
+
+```bash
+uv run pytest --cov=cl_client --cov-report=term-missing | grep "?"
+```
+
+Open `htmlcov/index.html` for interactive coverage drill-down.
