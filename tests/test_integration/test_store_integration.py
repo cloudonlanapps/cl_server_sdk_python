@@ -20,12 +20,12 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
-from conftest import get_expected_error, should_succeed
+from conftest import get_expected_error, should_succeed, AuthConfig
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_entities(store_manager, auth_config: dict[str, Any]):
+async def test_list_entities(store_manager, auth_config: AuthConfig):
     """Test listing entities with pagination."""
     if should_succeed(auth_config, operation_type="store_read"):
         # Should succeed
@@ -46,7 +46,7 @@ async def test_list_entities(store_manager, auth_config: dict[str, Any]):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_entities_with_search(store_manager, auth_config: dict[str, Any]):
+async def test_list_entities_with_search(store_manager, auth_config: AuthConfig):
     """Test listing entities with search query."""
     if should_succeed(auth_config, operation_type="store_read"):
         result = await store_manager.list_entities(
@@ -61,7 +61,7 @@ async def test_list_entities_with_search(store_manager, auth_config: dict[str, A
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_create_entity_collection(store_manager, auth_config: dict[str, Any]):
+async def test_create_entity_collection(store_manager, auth_config: AuthConfig):
     """Test creating a collection (folder) entity."""
     if should_succeed(auth_config, operation_type="store_write"):
         # Should succeed - create collection
@@ -96,7 +96,7 @@ async def test_create_entity_collection(store_manager, auth_config: dict[str, An
 async def test_create_entity_with_file(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test creating entity with file upload."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -134,7 +134,7 @@ async def test_create_entity_with_file(
 async def test_read_entity(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test reading entity by ID."""
     # First create an entity if we have write permissions
@@ -165,7 +165,7 @@ async def test_read_entity(
 async def test_update_entity(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test full update (PUT) of an entity."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -200,7 +200,7 @@ async def test_update_entity(
 async def test_patch_entity(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test partial update (PATCH) of an entity."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -234,7 +234,7 @@ async def test_patch_entity(
 async def test_patch_entity_soft_delete(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test soft delete via PATCH."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -273,7 +273,7 @@ async def test_patch_entity_soft_delete(
 async def test_delete_entity(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test hard delete of an entity."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -302,7 +302,7 @@ async def test_delete_entity(
 async def test_get_versions(
     store_manager,
     test_image: Path,
-    auth_config: dict[str, Any],
+    auth_config: AuthConfig,
 ):
     """Test retrieving version history for an entity."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -338,14 +338,14 @@ async def test_get_versions(
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_admin_get_config(store_manager, auth_config: dict[str, Any]):
+async def test_admin_get_config(store_manager, auth_config: AuthConfig):
     """Test getting store configuration (admin only)."""
     if should_succeed(auth_config, operation_type="admin"):
         # Should succeed for admin
         result = await store_manager.get_config()
         assert result.is_success, f"Expected success but got error: {result.error}"
         assert result.data is not None
-        assert isinstance(result.data.read_auth_enabled, bool)
+        assert isinstance(result.data.guest_mode, bool)
     else:
         # Should fail for non-admin
         result = await store_manager.get_config()
@@ -357,23 +357,24 @@ async def test_admin_get_config(store_manager, auth_config: dict[str, Any]):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_admin_update_read_auth(store_manager, auth_config: dict[str, Any]):
+async def test_admin_update_read_auth(store_manager, auth_config: AuthConfig):
     """Test updating read auth configuration (admin only)."""
     if should_succeed(auth_config, operation_type="admin"):
         # Get current config
         get_result = await store_manager.get_config()
         assert get_result.is_success
-        original_setting = get_result.data.read_auth_enabled
+        original_guest_mode = get_result.data.guest_mode
 
-        # Toggle read auth
-        update_result = await store_manager.update_read_auth(enabled=not original_setting)
+        # Toggle guest mode
+        # Note: enabled parameter is inverted from guest_mode (enabled=False means guest_mode=True)
+        update_result = await store_manager.update_read_auth(enabled=original_guest_mode)
         assert update_result.is_success
-        assert update_result.data.read_auth_enabled == (not original_setting)
+        assert update_result.data.guest_mode == (not original_guest_mode)
 
         # Restore original setting
-        restore_result = await store_manager.update_read_auth(enabled=original_setting)
+        restore_result = await store_manager.update_read_auth(enabled=not original_guest_mode)
         assert restore_result.is_success
-        assert restore_result.data.read_auth_enabled == original_setting
+        assert restore_result.data.guest_mode == original_guest_mode
     else:
         # Should fail for non-admin
         result = await store_manager.update_read_auth(enabled=True)

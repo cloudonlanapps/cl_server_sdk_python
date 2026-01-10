@@ -27,6 +27,7 @@ dependencies = [
 
 [project.scripts]
 cl_client = "cl_client.cli:main"  # CLI tool entry point
+cl-admin = "cl_client.utils.cl_admin:cli"  # Admin utility for user and config management
 
 [project.optional-dependencies]
 dev = [

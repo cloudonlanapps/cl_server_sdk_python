@@ -2,13 +2,12 @@
 
 import os
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 # Test vectors base directory (can be overridden via environment variable)
 TEST_VECTORS_DIR = Path(
-    os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server/test_vectors")
+    os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server_test_media")
 )
 
 
@@ -76,8 +75,8 @@ def test_video_720p(media_dir: Path) -> Path:
 
 @pytest.fixture(scope="module", autouse=True)
 async def cleanup_store_entities(
-    request: Any,
-    auth_config: dict[str, Any],
+    request: pytest.FixtureRequest,
+    auth_config,  # AuthConfig Pydantic model from parent conftest
 ):
     """Clean up all store entities before store integration tests run.
 
@@ -91,20 +90,25 @@ async def cleanup_store_entities(
         return
 
     # Skip cleanup if no auth (cannot delete entities)
-    if not auth_config["username"]:
+    if not auth_config.username:
         yield
         return
 
     # Cleanup requires admin
-    if not auth_config["is_admin"]:
+    user_info = auth_config.user_info
+    if not user_info or not user_info.is_admin:
         pytest.skip("Store cleanup requires admin credentials")
 
     import httpx
 
-    store_url = auth_config["store_url"]
-    auth_url = auth_config["auth_url"]
-    username = auth_config["username"]
-    password = auth_config["password"]
+    store_url = auth_config.store_url
+    auth_url = auth_config.auth_url
+    username = auth_config.username
+    password = auth_config.password
+
+    # Guaranteed to be not None at this point
+    assert username is not None
+    assert password is not None
 
     try:
         async with httpx.AsyncClient() as client:

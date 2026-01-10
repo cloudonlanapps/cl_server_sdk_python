@@ -14,8 +14,6 @@ different outcomes based on whether the user has admin permissions:
 - No-auth mode: Tests are skipped
 """
 
-from typing import Any
-
 import httpx
 import pytest
 from cl_client import ServerConfig
@@ -26,13 +24,13 @@ import sys
 from pathlib import Path as PathlibPath
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
-from conftest import get_expected_error, should_succeed
+from conftest import AuthConfig, get_expected_error, should_succeed
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_create_user_success(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_create_user_success(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin user creation endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
@@ -40,15 +38,15 @@ async def test_create_user_success(auth_config: dict[str, Any], is_no_auth: bool
     """
     # Create session with credentials from auth_config
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{auth_url}/users/",
@@ -66,8 +64,8 @@ async def test_create_user_success(auth_config: dict[str, Any], is_no_auth: bool
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -115,22 +113,22 @@ async def test_create_user_success(auth_config: dict[str, Any], is_no_auth: bool
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_list_users_success(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_list_users_success(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin list users endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can list users, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{auth_url}/users/")
             # Auth service always requires auth - should get 401
@@ -139,8 +137,8 @@ async def test_list_users_success(auth_config: dict[str, Any], is_no_auth: bool)
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -174,22 +172,22 @@ async def test_list_users_success(auth_config: dict[str, Any], is_no_auth: bool)
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_get_user_success(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_get_user_success(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin get user endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can get users, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{auth_url}/users/1")
             # Auth service always requires auth - should get 401
@@ -198,8 +196,8 @@ async def test_get_user_success(auth_config: dict[str, Any], is_no_auth: bool):
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -256,22 +254,22 @@ async def test_get_user_success(auth_config: dict[str, Any], is_no_auth: bool):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_permissions(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_update_user_permissions(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin update user permissions endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update permissions, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.patch(
                 f"{auth_url}/users/1",
@@ -283,8 +281,8 @@ async def test_update_user_permissions(auth_config: dict[str, Any], is_no_auth: 
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -343,22 +341,22 @@ async def test_update_user_permissions(auth_config: dict[str, Any], is_no_auth: 
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_password(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_update_user_password(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin update user password endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update password, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.patch(
                 f"{auth_url}/users/1",
@@ -370,8 +368,8 @@ async def test_update_user_password(auth_config: dict[str, Any], is_no_auth: boo
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -434,22 +432,22 @@ async def test_update_user_password(auth_config: dict[str, Any], is_no_auth: boo
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_update_user_active_status(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_update_user_active_status(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin update user active status endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update status, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.patch(
                 f"{auth_url}/users/1",
@@ -461,8 +459,8 @@ async def test_update_user_active_status(auth_config: dict[str, Any], is_no_auth
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -520,22 +518,22 @@ async def test_update_user_active_status(auth_config: dict[str, Any], is_no_auth
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_delete_user_success(auth_config: dict[str, Any], is_no_auth: bool):
+async def test_delete_user_success(auth_config: AuthConfig, is_no_auth: bool):
     """Test admin delete user endpoint.
 
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can delete users, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{auth_url}/users/1")
             # Auth service always requires auth - should get 401
@@ -544,8 +542,8 @@ async def test_delete_user_success(auth_config: dict[str, Any], is_no_auth: bool
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
@@ -598,7 +596,7 @@ async def test_delete_user_success(auth_config: dict[str, Any], is_no_auth: bool
 @pytest.mark.asyncio
 @pytest.mark.admin_only
 async def test_list_users_with_pagination(
-    auth_config: dict[str, Any], is_no_auth: bool
+    auth_config: AuthConfig, is_no_auth: bool
 ):
     """Test admin list users pagination endpoint.
 
@@ -606,15 +604,15 @@ async def test_list_users_with_pagination(
     In JWT mode: Verify admin can paginate users, non-admin gets 403
     """
     config = ServerConfig(
-        auth_url=str(auth_config["auth_url"]),
-        compute_url=str(auth_config["compute_url"]),
+        auth_url=str(auth_config.auth_url),
+        compute_url=str(auth_config.compute_url),
     )
     session = SessionManager(server_config=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
         # Try to access admin endpoint without valid auth
-        auth_url = str(auth_config["auth_url"])
+        auth_url = str(auth_config.auth_url)
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{auth_url}/users/?skip=0&limit=3")
             # Auth service always requires auth - should get 401
@@ -623,8 +621,8 @@ async def test_list_users_with_pagination(
         return  # Test passes - verified auth service security
 
     await session.login(
-        str(auth_config["username"]),
-        str(auth_config["password"]),
+        str(auth_config.username),
+        str(auth_config.password),
     )
 
     try:
