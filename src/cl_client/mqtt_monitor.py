@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 
 import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
@@ -55,6 +55,13 @@ class MQTTJobMonitor:
         # Connection event for blocking until connected
         self._connect_event = threading.Event()
         self._connected = False
+
+        # Event loop for scheduling async callbacks from MQTT thread
+        try:
+            self._event_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, will be set when connect() is called
+            self._event_loop = None
 
         # MQTT client
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)  # type: ignore[attr-defined]
@@ -244,14 +251,32 @@ class MQTTJobMonitor:
                 # Call on_progress callback for any status update
                 if on_progress:
                     try:
-                        on_progress(job)
+                        # Support both sync and async callbacks
+                        import inspect
+                        if inspect.iscoroutinefunction(on_progress):
+                            # Schedule coroutine on event loop from MQTT thread
+                            if self._event_loop and self._event_loop.is_running():
+                                asyncio.run_coroutine_threadsafe(on_progress(job), self._event_loop)
+                            else:
+                                logger.warning("Event loop not available for async on_progress callback")
+                        else:
+                            on_progress(job)
                     except Exception as e:
                         logger.error(f"Error in on_progress callback: {e}", exc_info=True)
 
                 # Call on_complete callback only for terminal states
                 if status in ["completed", "failed"] and on_complete:
                     try:
-                        on_complete(job)
+                        # Support both sync and async callbacks
+                        import inspect
+                        if inspect.iscoroutinefunction(on_complete):
+                            # Schedule coroutine on event loop from MQTT thread
+                            if self._event_loop and self._event_loop.is_running():
+                                asyncio.run_coroutine_threadsafe(on_complete(job), self._event_loop)
+                            else:
+                                logger.warning("Event loop not available for async on_complete callback")
+                        else:
+                            on_complete(job)
                     except Exception as e:
                         logger.error(f"Error in on_complete callback: {e}", exc_info=True)
 
@@ -284,12 +309,14 @@ class MQTTJobMonitor:
     def subscribe_job_updates(
         self,
         job_id: str,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
+        on_complete: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
     ) -> str:
         """Subscribe to job status updates via MQTT.
 
         Returns unique subscription ID. Supports multiple subscriptions per job.
+
+        Captures the running event loop for async callbacks.
 
         Args:
             job_id: Job ID to monitor
@@ -310,6 +337,15 @@ class MQTTJobMonitor:
         """
         # Generate unique subscription ID
         subscription_id = str(uuid.uuid4())
+
+        # Capture event loop for async callbacks (if not already captured)
+        if self._event_loop is None:
+            try:
+                self._event_loop = asyncio.get_running_loop()
+                logger.debug("Captured event loop for async MQTT callbacks")
+            except RuntimeError:
+                # No running loop yet, will be captured later or async callbacks will warn
+                pass
 
         # Store subscription (no need to subscribe to MQTT - already subscribed to events topic)
         self._job_subscriptions[subscription_id] = (job_id, on_progress, on_complete)

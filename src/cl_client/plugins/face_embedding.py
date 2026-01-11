@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -32,8 +32,8 @@ class FaceEmbeddingClient(BasePluginClient):
         image: Path,
         wait: bool = False,
         timeout: float | None = None,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
+        on_complete: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
     ) -> JobResponse:
         """Generate face embeddings from image.
 

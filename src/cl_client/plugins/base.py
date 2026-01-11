@@ -9,7 +9,7 @@ Provides common functionality for all plugin clients:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -46,8 +46,8 @@ class BasePluginClient:
         priority: int = 5,
         wait: bool = False,
         timeout: float | None = None,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
+        on_complete: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
     ) -> JobResponse:
         """Submit job without files (STUB for future file-less plugins).
 
@@ -83,8 +83,8 @@ class BasePluginClient:
         priority: int = 5,
         wait: bool = False,
         timeout: float | None = None,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
+        on_complete: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
     ) -> JobResponse:
         """Submit job with file uploads (PRIMARY METHOD).
 

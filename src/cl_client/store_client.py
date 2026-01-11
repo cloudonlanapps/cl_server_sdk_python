@@ -230,6 +230,50 @@ class StoreClient:
         faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
         return [FaceResponse.model_validate(f) for f in faces_data]
 
+    async def download_face_embedding(self, face_id: int, dest: Path) -> None:
+        """Download face embedding from Qdrant vector store.
+
+        Args:
+            face_id: Face ID
+            dest: Local destination path to save the .npy file
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if face or embedding not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/faces/{face_id}/embedding",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+
+        # Write .npy file content to destination
+        dest.write_bytes(response.content)
+
+    async def download_entity_embedding(self, entity_id: int, dest: Path) -> None:
+        """Download entity CLIP embedding from Qdrant vector store.
+
+        Args:
+            entity_id: Entity ID
+            dest: Local destination path to save the .npy file
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (404 if entity or embedding not found)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/embedding",
+            headers=self._get_headers(),
+        )
+        response.raise_for_status()
+
+        # Write .npy file content to destination
+        dest.write_bytes(response.content)
+
     async def get_entity_jobs(self, entity_id: int) -> list[EntityJobResponse]:
         """Get all compute jobs for an entity.
 
