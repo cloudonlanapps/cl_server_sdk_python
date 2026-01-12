@@ -45,7 +45,12 @@ class MQTTJobMonitor:
 
         # Job subscriptions: subscription_id -> (job_id, callbacks)
         self._job_subscriptions: dict[
-            str, tuple[str, Callable[[JobResponse], None] | None, Callable[[JobResponse], None] | None]
+            str,
+            tuple[
+                str,
+                Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None,
+                Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None,
+            ],
         ] = {}
 
         # Worker capability tracking
@@ -253,12 +258,15 @@ class MQTTJobMonitor:
                     try:
                         # Support both sync and async callbacks
                         import inspect
+
                         if inspect.iscoroutinefunction(on_progress):
                             # Schedule coroutine on event loop from MQTT thread
                             if self._event_loop and self._event_loop.is_running():
                                 asyncio.run_coroutine_threadsafe(on_progress(job), self._event_loop)
                             else:
-                                logger.warning("Event loop not available for async on_progress callback")
+                                logger.warning(
+                                    "Event loop not available for async on_progress callback"
+                                )
                         else:
                             on_progress(job)
                     except Exception as e:
@@ -269,12 +277,15 @@ class MQTTJobMonitor:
                     try:
                         # Support both sync and async callbacks
                         import inspect
+
                         if inspect.iscoroutinefunction(on_complete):
                             # Schedule coroutine on event loop from MQTT thread
                             if self._event_loop and self._event_loop.is_running():
                                 asyncio.run_coroutine_threadsafe(on_complete(job), self._event_loop)
                             else:
-                                logger.warning("Event loop not available for async on_complete callback")
+                                logger.warning(
+                                    "Event loop not available for async on_complete callback"
+                                )
                         else:
                             on_complete(job)
                     except Exception as e:
@@ -309,8 +320,12 @@ class MQTTJobMonitor:
     def subscribe_job_updates(
         self,
         job_id: str,
-        on_progress: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
-        on_complete: Callable[[JobResponse], None] | Callable[[JobResponse], Awaitable[None]] | None = None,
+        on_progress: Callable[[JobResponse], None]
+        | Callable[[JobResponse], Awaitable[None]]
+        | None = None,
+        on_complete: Callable[[JobResponse], None]
+        | Callable[[JobResponse], Awaitable[None]]
+        | None = None,
     ) -> str:
         """Subscribe to job status updates via MQTT.
 
@@ -386,9 +401,7 @@ class MQTTJobMonitor:
         """
         self._worker_callbacks.append(callback)
 
-    async def wait_for_capability(
-        self, task_type: str, timeout: float | None = None
-    ) -> bool:
+    async def wait_for_capability(self, task_type: str, timeout: float | None = None) -> bool:
         """Wait for worker with specific capability to be available.
 
         Args:

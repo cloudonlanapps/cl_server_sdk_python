@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 
 import httpx
@@ -225,8 +225,12 @@ class ComputeClient:
     def subscribe_job_updates(
         self,
         job_id: str,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: Callable[[JobResponse], None]
+        | Callable[[JobResponse], Awaitable[None]]
+        | None = None,
+        on_complete: Callable[[JobResponse], None]
+        | Callable[[JobResponse], Awaitable[None]]
+        | None = None,
     ) -> str:
         """Subscribe to job status updates via MQTT.
 
