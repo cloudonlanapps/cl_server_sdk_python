@@ -21,7 +21,7 @@ from .exceptions import (
     PermissionError,
     WorkerUnavailableError,
 )
-from .models import JobResponse, WorkerCapabilitiesResponse, WorkerCapability
+from .models import JobResponse, OnJobResponseCallback, WorkerCapabilitiesResponse, WorkerCapability
 from .mqtt_monitor import MQTTJobMonitor
 from .server_config import ServerConfig
 from .session_manager import SessionManager
@@ -43,6 +43,7 @@ __all__ = [
     "ServerConfig",
     # Models
     "JobResponse",
+    "OnJobResponseCallback",
     "WorkerCapability",
     "WorkerCapabilitiesResponse",
     # Auth Models
