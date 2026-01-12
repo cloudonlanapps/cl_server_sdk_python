@@ -1,6 +1,5 @@
 """Tests for models.py"""
 
-import pytest
 from cl_client.models import JobResponse, WorkerCapabilitiesResponse, WorkerCapability
 
 

@@ -1,6 +1,5 @@
 """Unit tests for plugin clients."""
 
-import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

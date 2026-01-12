@@ -14,14 +14,15 @@ different outcomes based on whether the user has admin permissions:
 - No-auth mode: Tests are skipped
 """
 
+import sys
+from pathlib import Path as PathlibPath
+
 import httpx
 import pytest
+
 from cl_client import ServerConfig
 from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
 from cl_client.session_manager import SessionManager
-
-import sys
-from pathlib import Path as PathlibPath
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import AuthConfig, get_expected_error, should_succeed

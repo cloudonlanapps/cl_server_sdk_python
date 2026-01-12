@@ -1,6 +1,6 @@
 """Tests for auth models."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError

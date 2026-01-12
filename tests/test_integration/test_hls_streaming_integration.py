@@ -6,15 +6,16 @@ Note: HLS streaming requires video files and ffmpeg.
 """
 
 import asyncio
+import sys
 from pathlib import Path
+from pathlib import Path as PathlibPath
 from typing import Any
 
 import pytest
-from cl_client import ComputeClient
 from httpx import HTTPStatusError
 
-import sys
-from pathlib import Path as PathlibPath
+from cl_client import ComputeClient
+
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import get_expected_error, should_succeed
 

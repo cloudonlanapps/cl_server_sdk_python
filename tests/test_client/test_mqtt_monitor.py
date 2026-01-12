@@ -1,10 +1,10 @@
 """Tests for mqtt_monitor.py"""
 
-import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from cl_client.config import ComputeClientConfig
 from cl_client.exceptions import WorkerUnavailableError
 from cl_client.models import JobResponse, WorkerCapability

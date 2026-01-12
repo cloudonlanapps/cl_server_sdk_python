@@ -1,16 +1,14 @@
 """Tests for compute_client.py"""
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
+
 from cl_client.auth import JWTAuthProvider, NoAuthProvider
 from cl_client.compute_client import ComputeClient
 from cl_client.config import ComputeClientConfig
 from cl_client.exceptions import WorkerUnavailableError
-from cl_client.models import JobResponse, WorkerCapabilitiesResponse
+from cl_client.models import JobResponse
 from cl_client.server_config import ServerConfig
 
 

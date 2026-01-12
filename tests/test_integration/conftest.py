@@ -2,15 +2,17 @@
 
 import asyncio
 import os
-from pathlib import Path
-
-import httpx
-import pytest
-from cl_client import ComputeClient, ServerConfig, SessionManager
 
 # Import models from parent conftest
 import sys
+from pathlib import Path
 from pathlib import Path as PathlibPath
+
+import httpx
+import pytest
+
+from cl_client import ComputeClient, ServerConfig, SessionManager
+
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import (
     AuthConfig,
@@ -20,7 +22,6 @@ from conftest import (
     StoreServerInfo,
     UserInfo,
 )
-
 
 # ============================================================================
 # SERVER PROBING

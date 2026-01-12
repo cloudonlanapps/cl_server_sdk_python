@@ -1,6 +1,5 @@
 """Tests for server configuration."""
 
-import os
 
 import pytest
 

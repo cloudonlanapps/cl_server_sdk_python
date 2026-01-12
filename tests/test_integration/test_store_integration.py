@@ -13,14 +13,13 @@ Store authentication model:
 """
 
 import sys
-from pathlib import Path as PathlibPath
 from pathlib import Path
-from typing import Any
+from pathlib import Path as PathlibPath
 
 import pytest
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
-from conftest import get_expected_error, should_succeed, AuthConfig
+from conftest import AuthConfig, get_expected_error, should_succeed
 
 
 @pytest.mark.integration
@@ -38,7 +37,7 @@ async def test_list_entities(store_manager, auth_config: AuthConfig):
     else:
         # Should fail
         result = await store_manager.list_entities(page=1, page_size=20)
-        assert result.is_error, f"Expected error but got success"
+        assert result.is_error, "Expected error but got success"
         expected_code = get_expected_error(auth_config, operation_type="store_read")
         # Check that error message indicates the expected status code
         assert result.error is not None

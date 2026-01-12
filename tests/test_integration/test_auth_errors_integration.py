@@ -8,17 +8,18 @@ Tests verify actual server responses to test server endpoints, not client behavi
 No tests are skipped - all run to verify expected HTTP status codes.
 """
 
+import sys
 from pathlib import Path
+from pathlib import Path as PathlibPath
 
 import httpx
 import pytest
+
 from cl_client import ComputeClient
 from cl_client.session_manager import SessionManager
 
-import sys
-from pathlib import Path as PathlibPath
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
-from conftest import get_expected_error, should_succeed, AuthConfig
+from conftest import AuthConfig, get_expected_error, should_succeed
 
 
 @pytest.mark.integration
@@ -73,8 +74,9 @@ async def test_invalid_token_rejected(test_image: Path, auth_config: AuthConfig)
     When compute auth disabled or guest mode: server ignores tokens (valid or invalid), request succeeds
     When compute auth enabled and no guest mode: server validates tokens and rejects invalid ones (401 Unauthorized)
     """
-    from cl_client.auth import JWTAuthProvider
     from conftest import AuthConfig as AuthConfigClass
+
+    from cl_client.auth import JWTAuthProvider
 
     # Create a no-auth config (invalid token = no valid user)
     no_auth_config = AuthConfigClass(
@@ -120,8 +122,9 @@ async def test_malformed_token_rejected(test_image: Path, auth_config: AuthConfi
     When compute auth disabled or guest mode: server ignores tokens, request succeeds
     When compute auth enabled and no guest mode: server rejects malformed tokens (401 Unauthorized)
     """
-    from cl_client.auth import JWTAuthProvider
     from conftest import AuthConfig as AuthConfigClass
+
+    from cl_client.auth import JWTAuthProvider
 
     # Create a no-auth config (malformed token = no valid user)
     no_auth_config = AuthConfigClass(

@@ -11,9 +11,9 @@ import asyncio
 from pathlib import Path
 
 import pytest
+
 from cl_client import ComputeClient
 from cl_client.store_manager import StoreManager
-
 
 # ============================================================================
 # PRIORITY 2: JOB TRIGGERING
@@ -194,13 +194,14 @@ async def test_face_recognition_workflow_single_face(
     assert face.landmarks is not None and len(face.landmarks) == 5  # 5 keypoints
     assert face.file_path is not None
 
-    print(f"✓ Face metadata valid:")
+    print("✓ Face metadata valid:")
     print(f"  - BBox: {face.bbox}")
     print(f"  - Confidence: {face.confidence:.3f}")
     print(f"  - Landmarks: {len(face.landmarks)} points")
 
     # Step 5: Verify face embedding exists in Qdrant by downloading it
     import tempfile
+
     import numpy as np
 
     with tempfile.NamedTemporaryFile(suffix=".npy", delete=False) as tmp:
@@ -236,7 +237,7 @@ async def test_face_recognition_workflow_single_face(
         assert len(person_faces) > 0
         print(f"  Known person has {len(person_faces)} face(s)")
     else:
-        print(f"  Warning: Face not linked to known person (known_person_id is None)")
+        print("  Warning: Face not linked to known person (known_person_id is None)")
 
     # Step 7: Test face similarity search
     # This face should potentially match faces in the multiple faces test (if run after)
@@ -415,7 +416,7 @@ async def test_image_similarity_search(
     )
 
     assert final_job.status == "completed"
-    print(f"✓ CLIP embedding completed")
+    print("✓ CLIP embedding completed")
 
     # Test image similarity search
     from httpx import HTTPStatusError

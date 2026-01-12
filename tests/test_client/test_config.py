@@ -1,6 +1,7 @@
 """Tests for config.py"""
 
 import pytest
+
 from cl_client.config import ComputeClientConfig
 
 

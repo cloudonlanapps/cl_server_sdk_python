@@ -5,19 +5,18 @@ Tests run in multiple auth modes: admin, user-with-permission, user-no-permissio
 """
 
 import asyncio
+import sys
 from pathlib import Path
+from pathlib import Path as PathlibPath
 from typing import Any
 
 import pytest
-from cl_client import ComputeClient
 from httpx import HTTPStatusError
 
-import sys
-from pathlib import Path as PathlibPath
+from cl_client import ComputeClient
+
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import get_expected_error, should_succeed
-
-
 
 
 @pytest.mark.integration
@@ -227,7 +226,6 @@ async def test_media_thumbnail_file_download(
     """Test downloading generated thumbnail file."""
     if should_succeed(auth_config, operation_type="plugin"):
         # Should succeed - run normal assertions
-        import tempfile
 
         # Generate thumbnail
         job = await client.media_thumbnail.generate(

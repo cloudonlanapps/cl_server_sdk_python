@@ -1,11 +1,10 @@
 """Tests for exceptions.py"""
 
-import pytest
 from cl_client.exceptions import (
-    ComputeClientError,
-    JobNotFoundError,
-    JobFailedError,
     AuthenticationError,
+    ComputeClientError,
+    JobFailedError,
+    JobNotFoundError,
     PermissionError,
     WorkerUnavailableError,
 )

@@ -7,7 +7,6 @@ Integration test fixtures are in tests/test_integration/conftest.py
 
 from pydantic import BaseModel
 
-
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================

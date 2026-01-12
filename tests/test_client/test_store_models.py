@@ -3,7 +3,6 @@
 from datetime import datetime
 
 import pytest
-from pydantic import ValidationError
 
 from cl_client.store_models import (
     Entity,
