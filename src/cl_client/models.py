@@ -3,6 +3,8 @@
 Mirrors server schemas with strict typing (NO Any types).
 """
 
+from collections.abc import Awaitable, Callable
+
 from pydantic import BaseModel, Field
 
 # JSON type hierarchy (from server schemas.py)
@@ -43,3 +45,8 @@ class WorkerCapability(BaseModel):
     capabilities: list[str] = Field(..., description="List of task types worker supports")
     idle_count: int = Field(..., description="1 if idle, 0 if busy")
     timestamp: int = Field(..., description="Message timestamp (milliseconds)")
+
+
+type OnJobResponseCallback = (
+    Callable[[JobResponse], Awaitable[None]] | Callable[[JobResponse], None] | None
+)

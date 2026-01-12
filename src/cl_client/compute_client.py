@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 
 import httpx
@@ -24,7 +23,7 @@ from .server_config import ServerConfig
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .models import JobResponse, WorkerCapabilitiesResponse
+    from .models import JobResponse, OnJobResponseCallback, WorkerCapabilitiesResponse
     from .plugins.clip_embedding import ClipEmbeddingClient
     from .plugins.dino_embedding import DinoEmbeddingClient
     from .plugins.exif import ExifClient
@@ -225,12 +224,8 @@ class ComputeClient:
     def subscribe_job_updates(
         self,
         job_id: str,
-        on_progress: Callable[[JobResponse], None]
-        | Callable[[JobResponse], Awaitable[None]]
-        | None = None,
-        on_complete: Callable[[JobResponse], None]
-        | Callable[[JobResponse], Awaitable[None]]
-        | None = None,
+        on_progress: OnJobResponseCallback = None,
+        on_complete: OnJobResponseCallback = None,
     ) -> str:
         """Subscribe to job status updates via MQTT.
 

@@ -14,9 +14,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 
-import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
+import paho.mqtt.client as mqtt
 
 from .config import ComputeClientConfig
+from .models import OnJobResponseCallback  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from .models import JobResponse, WorkerCapability
@@ -320,12 +321,8 @@ class MQTTJobMonitor:
     def subscribe_job_updates(
         self,
         job_id: str,
-        on_progress: Callable[[JobResponse], None]
-        | Callable[[JobResponse], Awaitable[None]]
-        | None = None,
-        on_complete: Callable[[JobResponse], None]
-        | Callable[[JobResponse], Awaitable[None]]
-        | None = None,
+        on_progress: OnJobResponseCallback = None,
+        on_complete: OnJobResponseCallback = None,
     ) -> str:
         """Subscribe to job status updates via MQTT.
 

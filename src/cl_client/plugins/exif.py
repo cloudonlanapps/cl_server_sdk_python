@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,7 +9,7 @@ from .base import BasePluginClient
 
 if TYPE_CHECKING:
     from ..compute_client import ComputeClient
-    from ..models import JobResponse
+    from ..models import JobResponse, OnJobResponseCallback
 
 
 class ExifClient(BasePluginClient):
@@ -32,8 +31,8 @@ class ExifClient(BasePluginClient):
         image: Path,
         wait: bool = False,
         timeout: float | None = None,
-        on_progress: Callable[[JobResponse], None] | None = None,
-        on_complete: Callable[[JobResponse], None] | None = None,
+        on_progress: OnJobResponseCallback = None,
+        on_complete: OnJobResponseCallback = None,
     ) -> JobResponse:
         """Extract EXIF metadata from image.
 
