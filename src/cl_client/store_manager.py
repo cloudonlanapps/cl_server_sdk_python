@@ -395,7 +395,7 @@ class StoreManager:
         except Exception as e:
             return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
 
-    async def update_guest_mode(self, guest_mode: bool) -> StoreOperationResult[bool]:
+    async def update_guest_mode(self, guest_mode: bool) -> StoreOperationResult[StoreConfig]:
         """Update guest mode configuration (admin only).
 
         Args:

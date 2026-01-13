@@ -5,7 +5,7 @@ Mirrors server schemas with strict typing (NO Any types).
 
 from collections.abc import Awaitable, Callable
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 # JSON type hierarchy (from server schemas.py)
 type JSONPrimitive = str | int | float | bool | None
