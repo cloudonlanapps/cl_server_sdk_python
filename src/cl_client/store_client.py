@@ -551,7 +551,7 @@ class StoreClient:
         _ = response.raise_for_status()
         return StoreConfig.model_validate(response.json())
 
-    async def update_guest_mode(self, guest_mode: bool) -> bool:
+    async def update_guest_mode(self, guest_mode: bool) -> StoreConfig:
         """Update guest mode configuration (admin only).
 
         Note: Uses multipart/form-data, NOT JSON.
@@ -578,7 +578,7 @@ class StoreClient:
             headers=self._get_headers(),
         )
         _ = response.raise_for_status()
-        return True
+        return await self.get_config() 
 
     # Face recognition and similarity search endpoints
 

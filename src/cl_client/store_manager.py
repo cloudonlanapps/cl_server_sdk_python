@@ -406,11 +406,11 @@ class StoreManager:
         """
         try:
             result = await self._store_client.update_guest_mode(guest_mode=guest_mode)
-            return StoreOperationResult[bool](
+            return StoreOperationResult[StoreConfig](
                 success="Guest mode configuration updated successfully",
                 data=result,
             )
         except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[bool], self._handle_error(e))
+            return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
         except Exception as e:
-            return StoreOperationResult[bool](error=f"Unexpected error: {str(e)}")
+            return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
