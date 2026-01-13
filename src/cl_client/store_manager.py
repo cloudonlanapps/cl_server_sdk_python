@@ -394,3 +394,23 @@ class StoreManager:
             return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
+
+    async def update_guest_mode(self, guest_mode: bool) -> StoreOperationResult[bool]:
+        """Update guest mode configuration (admin only).
+
+        Args:
+            guest_mode: Whether to enable guest mode
+
+        Returns:
+            StoreOperationResult with success status
+        """
+        try:
+            result = await self._store_client.update_guest_mode(guest_mode=guest_mode)
+            return StoreOperationResult[bool](
+                success="Guest mode configuration updated successfully",
+                data=result,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bool], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bool](error=f"Unexpected error: {str(e)}")

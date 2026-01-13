@@ -141,10 +141,12 @@ async def test_get_job_invalid_response(client, mock_httpx_client):
     mock_response.json.return_value = "not a dict"  # Invalid format
     mock_httpx_client.get.return_value = mock_response
 
-    with pytest.raises(ValueError) as exc_info:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
         await client.get_job("test-123")
 
-    assert "Invalid response format" in str(exc_info.value)
+    assert "1 validation error" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -243,7 +245,7 @@ def test_subscribe_job_updates(client, mock_mqtt_monitor):
     def on_complete(job: JobResponse):
         pass
 
-    sub_id = client.subscribe_job_updates(
+    sub_id = client.mqtt_subscribe_job_updates(
         job_id="test-123", on_progress=on_progress, on_complete=on_complete
     )
 

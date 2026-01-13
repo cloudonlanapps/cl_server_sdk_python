@@ -40,7 +40,7 @@ class TestStoreManagerInit:
 
         assert manager._store_client is not None
         assert manager._store_client._base_url == "http://example.com:8001"
-        assert manager._store_client._auth_provider is None
+        assert manager._store_client.auth_provider is None
 
     @pytest.mark.asyncio
     async def test_authenticated_mode(self):
@@ -76,10 +76,13 @@ class TestStoreManagerInit:
             await session.login("user", "password")
 
         # Create store manager from session
-        manager = StoreManager.authenticated(session_manager=session)
+        manager = StoreManager.authenticated(
+            config=config,
+            get_cached_token=session.get_token,
+        )
 
         assert manager._store_client is not None
-        assert manager._store_client._auth_provider is not None
+        assert manager._store_client.auth_provider is not None
 
         await session.__aexit__(None, None, None)
 
@@ -344,20 +347,16 @@ class TestStoreManagerAdminOperations:
         mock_store_client.get_config.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_read_auth_success(self, store_manager, mock_store_client):
-        """Test updating read auth configuration."""
-        expected_config = StoreConfig(
-            guest_mode=True,
-            updated_at=1704153600000,
-        )
-        mock_store_client.update_read_auth.return_value = expected_config
+    async def test_update_guest_mode_success(self, store_manager, mock_store_client):
+        """Test updating guest mode configuration."""
+        mock_store_client.update_guest_mode.return_value = True
 
-        result = await store_manager.update_read_auth(enabled=False)
+        result = await store_manager.update_guest_mode(guest_mode=True)
 
         assert result.is_success
-        assert result.data.guest_mode is True
-        assert result.success == "Read authentication configuration updated successfully"
-        mock_store_client.update_read_auth.assert_called_once_with(enabled=False)
+        assert result.data is True
+        assert result.success == "Guest mode configuration updated successfully"
+        mock_store_client.update_guest_mode.assert_called_once_with(guest_mode=True)
 
 
 class TestStoreManagerErrorHandling:

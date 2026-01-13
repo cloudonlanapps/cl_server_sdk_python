@@ -92,7 +92,7 @@ class TestJWTAuthProviderInitialization:
         """Test JWTAuthProvider initialization with direct token."""
         provider = JWTAuthProvider(token="test-token")
         assert provider._token == "test-token"
-        assert provider._session_manager is None
+        assert provider.get_cached_token is None
 
     def test_jwt_auth_provider_no_arguments(self):
         """Test JWTAuthProvider raises error when no arguments provided."""

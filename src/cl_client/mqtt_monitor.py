@@ -17,7 +17,7 @@ from loguru import logger
 from paho.mqtt.enums import CallbackAPIVersion
 from paho.mqtt.properties import Properties
 from paho.mqtt.reasoncodes import ReasonCode
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .config import ComputeClientConfig
 from .models import (
@@ -171,7 +171,7 @@ class MQTTJobMonitor:
             capability = WorkerCapability.model_validate_json(msg.payload.decode())
 
             self._update_worker(capability)
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError) as e:
             logger.warning(f"Invalid worker capability message: {e}")
 
     def _handle_job_event(self, msg: mqtt.MQTTMessage) -> None:
@@ -264,7 +264,7 @@ class MQTTJobMonitor:
                             f"Error in on_complete callback: {e}", exc_info=True
                         )
 
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as e:
             logger.warning(f"Invalid job event message: {e}")
 
     def _update_worker(self, capability: WorkerCapability) -> None:

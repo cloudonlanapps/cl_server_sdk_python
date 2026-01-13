@@ -91,10 +91,8 @@ async def test_base_plugin_submit_with_files(mock_compute_client, temp_image_fil
     }
     mock_response.raise_for_status = MagicMock()
 
-    # Mock httpx client
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-123")
 
     # Mock get_job to return matching job
     mock_compute_client.get_job.return_value = JobResponse(
@@ -113,9 +111,9 @@ async def test_base_plugin_submit_with_files(mock_compute_client, temp_image_fil
         priority=7,
     )
 
-    # Verify HTTP request
-    assert mock_http_client.post.called
-    call_args = mock_http_client.post.call_args
+    # Verify http_submit_job was called
+    mock_compute_client.http_submit_job.assert_called_once()
+    call_args = mock_compute_client.http_submit_job.call_args
     assert "/jobs/media_thumbnail" in call_args[0][0]
 
     # Verify response
@@ -143,10 +141,8 @@ async def test_base_plugin_submit_with_files_and_wait(mock_compute_client, temp_
         "params": {},
     }
 
-    # Mock httpx client
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-123")
 
     # Mock get_job (called first)
     queued_job = JobResponse(
@@ -203,10 +199,8 @@ async def test_base_plugin_submit_with_callbacks(mock_compute_client, temp_image
         "params": {},
     }
 
-    # Mock httpx client
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-123")
 
     # Mock get_job to return matching job
     mock_compute_client.get_job = AsyncMock(return_value=JobResponse(
@@ -218,7 +212,7 @@ async def test_base_plugin_submit_with_callbacks(mock_compute_client, temp_image
     ))
 
     # Mock subscribe_job_updates
-    mock_compute_client.subscribe_job_updates = MagicMock(return_value="sub-123")
+    mock_compute_client.mqtt_subscribe_job_updates = MagicMock(return_value="sub-123")
 
     # Callbacks
     on_progress = MagicMock()
@@ -232,7 +226,7 @@ async def test_base_plugin_submit_with_callbacks(mock_compute_client, temp_image
     )
 
     # Verify subscription
-    mock_compute_client.subscribe_job_updates.assert_called_once_with(
+    mock_compute_client.mqtt_subscribe_job_updates.assert_called_once_with(
         job_id="test-job-123",
         on_progress=on_progress,
         on_complete=on_complete,
@@ -281,9 +275,8 @@ async def test_clip_embedding_embed_image(mock_compute_client, temp_image_file):
         "params": {},
     }
 
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-123")
 
     # Mock get_job to return matching job
     mock_compute_client.get_job.return_value = JobResponse(
@@ -361,9 +354,8 @@ async def test_image_conversion_convert(mock_compute_client, temp_image_file):
         "params": {},
     }
 
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-456")
 
     # Mock get_job to return matching job
     mock_compute_client.get_job.return_value = JobResponse(
@@ -409,9 +401,8 @@ async def test_media_thumbnail_generate(mock_compute_client, temp_image_file):
         "params": {},
     }
 
-    mock_http_client = AsyncMock()
-    mock_http_client.post.return_value = mock_response
-    mock_compute_client._session = mock_http_client
+    # Mock http_submit_job
+    mock_compute_client.http_submit_job = AsyncMock(return_value="test-job-789")
 
     # Mock get_job to return matching job
     mock_compute_client.get_job.return_value = JobResponse(

@@ -35,7 +35,7 @@ class TestStoreClientInit:
         client = StoreClient()
         assert client._base_url == "http://localhost:8001"
         assert client._timeout == 30.0
-        assert client._auth_provider is None
+        assert client.auth_provider is None
 
     def test_init_with_auth(self):
         """Test initialization with auth provider."""
@@ -47,7 +47,7 @@ class TestStoreClientInit:
         )
         assert client._base_url == "http://example.com:8001"
         assert client._timeout == 60.0
-        assert client._auth_provider is auth
+        assert client.auth_provider is auth
 
 
 class TestStoreClientReadOperations:
@@ -334,28 +334,21 @@ class TestStoreClientAdminOperations:
         assert result.updated_by == "admin"
 
     @pytest.mark.asyncio
-    async def test_update_read_auth(self, store_client, mock_httpx_client):
-        """Test updating read auth configuration."""
+    async def test_update_guest_mode(self, store_client, mock_httpx_client):
+        """Test updating guest mode configuration."""
         mock_put_response = Mock()
         mock_put_response.raise_for_status = Mock()
 
-        # Mock GET response for get_config() call after PUT
-        mock_get_response = Mock()
-        mock_get_response.json.return_value = {
-            "guest_mode": True,
-            "updated_at": 1704153600000,
-        }
-        mock_get_response.raise_for_status = Mock()
+        # Mock GET response for get_config() call after PUT (if needed, but update_guest_mode returns bool)
+        # Actually update_guest_mode just returns True.
 
         mock_httpx_client.put.return_value = mock_put_response
-        mock_httpx_client.get.return_value = mock_get_response
 
-        result = await store_client.update_read_auth(enabled=False)
+        result = await store_client.update_guest_mode(guest_mode=True)
 
-        assert result.guest_mode is True
+        assert result is True
 
-        # Verify multipart form data (update_read_auth calls update_guest_mode)
-        # enabled=False means guest_mode=True
+        # Verify multipart form data
         call_args = mock_httpx_client.put.call_args
         assert call_args[1]["data"]["guest_mode"] == "true"
 
