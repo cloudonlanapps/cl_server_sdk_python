@@ -6,23 +6,22 @@ with consistent error handling via StoreOperationResult wrapper.
 Matches the Dart SDK StoreManager pattern.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import httpx
 
-from cl_client.auth import JWTAuthProvider
-from cl_client.store_client import StoreClient
-from cl_client.store_models import (
+from .auth import JWTAuthProvider
+from .server_config import ServerConfig
+from .store_client import StoreClient
+from .store_models import (
     Entity,
     EntityListResponse,
     EntityVersion,
     StoreConfig,
     StoreOperationResult,
 )
-
-if TYPE_CHECKING:
-    from cl_client.session_manager import SessionManager
 
 
 class StoreManager:
@@ -69,7 +68,7 @@ class StoreManager:
             Prefer using guest() or authenticated() class methods instead
             of calling this constructor directly.
         """
-        self._store_client = store_client
+        self._store_client: StoreClient = store_client
 
     @classmethod
     def guest(cls, base_url: str = "http://localhost:8001") -> "StoreManager":
@@ -89,7 +88,8 @@ class StoreManager:
     @classmethod
     def authenticated(
         cls,
-        session_manager: "SessionManager",
+        config: ServerConfig,
+        get_cached_token: Callable[[], str] | None = None,
         base_url: str | None = None,
     ) -> "StoreManager":
         """Create StoreManager with authentication from SessionManager.
@@ -101,19 +101,16 @@ class StoreManager:
         Returns:
             StoreManager instance configured with authentication
         """
-        config = session_manager._server_config  # type: ignore[reportPrivateUsage]  # Intentionally exposed for client factories
         url = base_url or config.store_url
-        auth_provider = JWTAuthProvider(session_manager=session_manager)
+        auth_provider = JWTAuthProvider(get_cached_token=get_cached_token)
         return cls(StoreClient(base_url=url, auth_provider=auth_provider))
 
     async def __aenter__(self) -> "StoreManager":
         """Async context manager entry."""
-        await self._store_client.__aenter__()
+        _ = await self._store_client.__aenter__()
         return self
 
-    async def __aexit__(
-        self, exc_type: object, exc_val: object, exc_tb: object
-    ) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
         await self._store_client.__aexit__(exc_type, exc_val, exc_tb)
 
@@ -128,7 +125,9 @@ class StoreManager:
         """
         status_code = error.response.status_code
         try:
-            error_data: dict[str, object] = error.response.json()  # type: ignore[reportAny]  # Error detail extraction
+            error_data: dict[  # Error detail extraction  # pyright: ignore[reportAny]
+                str, object
+            ] = error.response.json()
             detail = str(error_data.get("detail", str(error)))
         except Exception:
             detail = str(error)
@@ -389,31 +388,6 @@ class StoreManager:
             config = await self._store_client.get_config()
             return StoreOperationResult[StoreConfig](
                 success="Configuration retrieved successfully",
-                data=config,
-            )
-        except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
-        except Exception as e:
-            return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
-
-    async def update_read_auth(
-        self,
-        enabled: bool,
-    ) -> StoreOperationResult[StoreConfig]:
-        """Update read authentication configuration (admin only).
-
-        Requires admin role.
-
-        Args:
-            enabled: Whether to enable read authentication
-
-        Returns:
-            StoreOperationResult containing updated StoreConfig or error
-        """
-        try:
-            config = await self._store_client.update_read_auth(enabled=enabled)
-            return StoreOperationResult[StoreConfig](
-                success="Read authentication configuration updated successfully",
                 data=config,
             )
         except httpx.HTTPStatusError as e:

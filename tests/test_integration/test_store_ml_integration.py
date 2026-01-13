@@ -67,7 +67,7 @@ async def test_entity_triggers_jobs(
         assert job.entity_id == entity.id
         assert job.job_id is not None
         assert job.task_type in ["face_detection", "clip_embedding"]
-        assert job.status in ["queued", "in_progress", "completed", "failed"]
+        assert job.status in ["queued", "processing", "completed", "failed"]
         assert job.created_at is not None
         assert job.updated_at is not None
 
@@ -137,7 +137,7 @@ async def test_face_recognition_workflow_single_face(
     assert final_job.status == "completed"
     assert final_job.task_output is not None
     assert "faces" in final_job.task_output
-    num_faces = len(final_job.task_output['faces'])
+    num_faces = len(final_job.task_output["faces"])
     print(f"✓ Face detection completed - found {num_faces} face(s) in job output")
 
     # Step 2b: Wait for face embedding jobs to complete
@@ -145,7 +145,7 @@ async def test_face_recognition_workflow_single_face(
     print(f"  Waiting for {num_faces} face embedding job(s) to complete...")
 
     max_wait_time = 60  # 60 seconds total
-    wait_interval = 2   # Check every 2 seconds
+    wait_interval = 2  # Check every 2 seconds
     elapsed = 0
 
     while elapsed < max_wait_time:
@@ -169,7 +169,9 @@ async def test_face_recognition_workflow_single_face(
         jobs = await store_client.get_entity_jobs(entity.id)
         face_embedding_jobs = [j for j in jobs if j.task_type == "face_embedding"]
         completed = [j for j in face_embedding_jobs if j.status == "completed"]
-        print(f"  Warning: Timeout waiting for face embeddings. Status: {len(completed)}/{num_faces} completed")
+        print(
+            f"  Warning: Timeout waiting for face embeddings. Status: {len(completed)}/{num_faces} completed"
+        )
 
     # Step 3: Retrieve detected faces from store
     faces = await store_client.get_entity_faces(entity.id)
@@ -177,7 +179,9 @@ async def test_face_recognition_workflow_single_face(
     # Note: Store may not have face records if face detection results aren't persisted
     # For now, verify faces were detected in job output
     if len(faces) == 0:
-        pytest.skip("Face detection succeeded but faces not persisted to store (store-compute integration not configured)")
+        pytest.skip(
+            "Face detection succeeded but faces not persisted to store (store-compute integration not configured)"
+        )
 
     print(f"✓ Retrieved {len(faces)} face(s) from store")
 
@@ -301,7 +305,7 @@ async def test_face_recognition_workflow_multiple_faces(
     assert final_job.status == "completed"
     assert final_job.task_output is not None
     assert "faces" in final_job.task_output
-    num_faces = len(final_job.task_output['faces'])
+    num_faces = len(final_job.task_output["faces"])
     print(f"✓ Face detection completed - found {num_faces} face(s) in job output")
 
     # Step 2b: Wait for face embedding jobs to complete
@@ -329,14 +333,18 @@ async def test_face_recognition_workflow_multiple_faces(
         jobs = await store_client.get_entity_jobs(entity.id)
         face_embedding_jobs = [j for j in jobs if j.task_type == "face_embedding"]
         completed = [j for j in face_embedding_jobs if j.status == "completed"]
-        print(f"  Warning: Timeout waiting for face embeddings. Status: {len(completed)}/{num_faces} completed")
+        print(
+            f"  Warning: Timeout waiting for face embeddings. Status: {len(completed)}/{num_faces} completed"
+        )
 
     # Step 3: Retrieve all faces
     faces = await store_client.get_entity_faces(entity.id)
 
     # Note: Store may not have face records if face detection results aren't persisted
     if len(faces) == 0:
-        pytest.skip("Face detection succeeded but faces not persisted to store (store-compute integration not configured)")
+        pytest.skip(
+            "Face detection succeeded but faces not persisted to store (store-compute integration not configured)"
+        )
 
     assert len(faces) > 1, f"Expected multiple faces, got {len(faces)}"
     print(f"✓ Detected {len(faces)} faces")
@@ -347,7 +355,7 @@ async def test_face_recognition_workflow_multiple_faces(
         assert face.entity_id == entity.id
         assert face.bbox is not None and len(face.bbox) == 4
         assert 0.0 <= face.confidence <= 1.0
-        print(f"  Face {i+1}: confidence={face.confidence:.3f}, bbox={face.bbox}")
+        print(f"  Face {i + 1}: confidence={face.confidence:.3f}, bbox={face.bbox}")
 
     # Step 5: Test face similarity search
     first_face_id = faces[0].id
@@ -370,7 +378,9 @@ async def test_face_recognition_workflow_multiple_faces(
         print(f"  Note: No similar faces found for face {first_face_id} above threshold 0.7: {e}")
 
 
-@pytest.mark.skip(reason="Focus on face detection workflow first - CLIP similarity search to be tested later")
+@pytest.mark.skip(
+    reason="Focus on face detection workflow first - CLIP similarity search to be tested later"
+)
 @pytest.mark.asyncio
 async def test_image_similarity_search(
     store_manager: StoreManager,
@@ -437,5 +447,7 @@ async def test_image_similarity_search(
             print(f"  Similar entity {result.entity_id}: score={result.score:.3f}")
     except HTTPStatusError as e:
         if e.response.status_code == 404:
-            pytest.skip("Image similarity search endpoint not implemented or entity not indexed yet")
+            pytest.skip(
+                "Image similarity search endpoint not implemented or entity not indexed yet"
+            )
         raise

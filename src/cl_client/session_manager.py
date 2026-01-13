@@ -75,8 +75,8 @@ class SessionManager:
             base_url: Auth service URL (overrides server_config.auth_url)
             server_config: Server configuration (default: from environment)
         """
-        self._config = server_config or ServerConfig.from_env()
-        self._auth_client = AuthClient(
+        self._config: ServerConfig = server_config or ServerConfig.from_env()
+        self._auth_client: AuthClient = AuthClient(
             base_url=base_url,
             server_config=self._config,
         )
@@ -118,9 +118,7 @@ class SessionManager:
         self._current_token = token_response.access_token
 
         # Fetch and cache user info
-        self._current_user = await self._auth_client.get_current_user(
-            self._current_token
-        )
+        self._current_user = await self._auth_client.get_current_user(self._current_token)
 
         return token_response
 
@@ -174,9 +172,7 @@ class SessionManager:
 
         # Fetch user info if not cached
         assert self._current_token is not None
-        self._current_user = await self._auth_client.get_current_user(
-            self._current_token
-        )
+        self._current_user = await self._auth_client.get_current_user(self._current_token)
         return self._current_user
 
     # ========================================================================
@@ -271,7 +267,7 @@ class SessionManager:
 
         if self.is_authenticated():
             # Create JWT auth provider with SessionManager integration
-            auth_provider = JWTAuthProvider(session_manager=self)
+            auth_provider = JWTAuthProvider(get_cached_token=self.get_token)
         else:
             # Guest mode - no authentication
             auth_provider = NoAuthProvider()
@@ -323,7 +319,8 @@ class SessionManager:
             raise RuntimeError("Not authenticated. Call login() first.")
 
         return StoreManager.authenticated(
-            session_manager=self,
+            config=self._config,
+            get_cached_token=self.get_token,
             base_url=self._config.store_url,
         )
 
@@ -339,8 +336,6 @@ class SessionManager:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(
-        self, exc_type: object, exc_val: object, exc_tb: object
-    ) -> None:
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
         await self.close()

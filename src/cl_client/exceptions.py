@@ -24,7 +24,7 @@ class JobNotFoundError(ComputeClientError):
             job_id: Job ID that was not found
         """
         super().__init__(f"Job not found: {job_id}")
-        self.job_id = job_id
+        self.job_id: str = job_id
 
 
 class JobFailedError(ComputeClientError):
@@ -38,7 +38,7 @@ class JobFailedError(ComputeClientError):
         """
         msg = f"Job {job.job_id} failed: {job.error_message}"
         super().__init__(msg)
-        self.job = job
+        self.job: JobResponse = job
 
 
 class AuthenticationError(ComputeClientError):
@@ -68,5 +68,5 @@ class WorkerUnavailableError(ComputeClientError):
             f"Available capabilities: {available_capabilities}"
         )
         super().__init__(msg)
-        self.task_type = task_type
-        self.available_capabilities = available_capabilities
+        self.task_type: str = task_type
+        self.available_capabilities: dict[str, int] = available_capabilities

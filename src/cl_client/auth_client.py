@@ -50,10 +50,10 @@ class AuthClient:
             timeout: Request timeout in seconds
         """
         config = server_config or ServerConfig.from_env()
-        self.base_url = base_url or config.auth_url
-        self.timeout = timeout
+        self.base_url: str = base_url or config.auth_url
+        self.timeout: float = timeout
 
-        self._session = httpx.AsyncClient(
+        self._session: httpx.AsyncClient = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=self.timeout,
         )
@@ -85,7 +85,7 @@ class AuthClient:
             "/auth/token",
             data={"username": username, "password": password},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return TokenResponse.model_validate(response.json())
 
@@ -111,7 +111,7 @@ class AuthClient:
             "/auth/token/refresh",
             headers={"Authorization": f"Bearer {token}"},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return TokenResponse.model_validate(response.json())
 
@@ -128,7 +128,7 @@ class AuthClient:
             print(key_info.algorithm)  # ES256
         """
         response = await self._session.get("/auth/public-key")
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return PublicKeyResponse.model_validate(response.json())
 
@@ -158,7 +158,7 @@ class AuthClient:
             "/users/me",
             headers={"Authorization": f"Bearer {token}"},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return UserResponse.model_validate(response.json())
 
@@ -206,7 +206,7 @@ class AuthClient:
             headers={"Authorization": f"Bearer {token}"},
             data=form_data,
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return UserResponse.model_validate(response.json())
 
@@ -243,7 +243,7 @@ class AuthClient:
             headers={"Authorization": f"Bearer {token}"},
             params={"skip": skip, "limit": limit},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         data = cast(list[object], response.json())
         return [UserResponse.model_validate(item) for item in data]
@@ -274,7 +274,7 @@ class AuthClient:
             f"/users/{user_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return UserResponse.model_validate(response.json())
 
@@ -322,7 +322,7 @@ class AuthClient:
             headers={"Authorization": f"Bearer {token}"},
             data=update_data,
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         return UserResponse.model_validate(response.json())
 
@@ -349,7 +349,7 @@ class AuthClient:
             f"/users/{user_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
     # ========================================================================
     # Cleanup

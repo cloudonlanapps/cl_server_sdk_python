@@ -7,11 +7,9 @@ This allows easy swapping between no-auth, JWT, API key, etc.
 import base64
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
-
-if TYPE_CHECKING:
-    from .session_manager import SessionManager
+from typing import cast, override
 
 
 class AuthProvider(ABC):
@@ -33,6 +31,7 @@ class NoAuthProvider(AuthProvider):
     Returns empty headers for all requests.
     """
 
+    @override
     def get_headers(self) -> dict[str, str]:
         """Get authentication headers.
 
@@ -66,9 +65,7 @@ class JWTAuthProvider(AuthProvider):
     """
 
     def __init__(
-        self,
-        token: str | None = None,
-        session_manager: "SessionManager | None" = None,
+        self, token: str | None = None, get_cached_token: Callable[[], str] | None = None
     ) -> None:
         """Initialize JWT auth provider.
 
@@ -79,11 +76,11 @@ class JWTAuthProvider(AuthProvider):
         Raises:
             ValueError: If neither token nor session_manager is provided
         """
-        if token is None and session_manager is None:
+        if token is None and get_cached_token is None:
             raise ValueError("Either token or session_manager must be provided")
 
-        self._token = token
-        self._session_manager = session_manager
+        self._token: str | None = token
+        self.get_cached_token: Callable[[], str] | None = get_cached_token
 
     def _parse_token_expiry(self, token: str) -> datetime | None:
         """Parse JWT token to extract expiry time.
@@ -186,13 +183,14 @@ class JWTAuthProvider(AuthProvider):
         if self._token is not None:
             return self._token
 
-        if self._session_manager is not None:
+        if self.get_cached_token is not None:
             # In SessionManager mode, get token from manager
             # This will be implemented when SessionManager is created
-            return self._session_manager.get_token()
+            return self.get_cached_token()
 
         raise ValueError("No token available")
 
+    @override
     def get_headers(self) -> dict[str, str]:
         """Get authentication headers with Bearer token.
 
@@ -206,6 +204,7 @@ class JWTAuthProvider(AuthProvider):
         Raises:
             ValueError: If no token is available
         """
+
         token = self.get_token()
         return {"Authorization": f"Bearer {token}"}
 

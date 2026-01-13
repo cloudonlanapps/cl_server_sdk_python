@@ -5,11 +5,12 @@ All write operations use multipart/form-data (not JSON).
 """
 
 from pathlib import Path
-from typing import Any
 
 import httpx
+from pydantic import TypeAdapter
 
 from cl_client.auth import AuthProvider
+from cl_client.http_utils import HttpUtils
 from cl_client.store_models import (
     Entity,
     EntityJobResponse,
@@ -63,9 +64,9 @@ class StoreClient:
             auth_provider: Optional auth provider for authenticated requests
             timeout: Request timeout in seconds
         """
-        self._base_url = base_url.rstrip("/")
-        self._auth_provider = auth_provider
-        self._timeout = timeout
+        self._base_url: str = base_url.rstrip("/")
+        self.auth_provider: AuthProvider | None = auth_provider
+        self._timeout: float = timeout
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "StoreClient":
@@ -84,8 +85,8 @@ class StoreClient:
         Content-Type is automatically set by httpx for multipart/form-data.
         """
         headers: dict[str, str] = {}
-        if self._auth_provider:
-            headers.update(self._auth_provider.get_headers())
+        if self.auth_provider:
+            headers.update(self.auth_provider.get_headers())
         return headers
 
     # Health check
@@ -106,7 +107,7 @@ class StoreClient:
             f"{self._base_url}/",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return RootResponse.model_validate(response.json())
 
     # Read operations (use query parameters)
@@ -135,7 +136,7 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        params: dict[str, Any] = {
+        params: dict[str, int | str] = {
             "page": page,
             "page_size": page_size,
         }
@@ -149,7 +150,7 @@ class StoreClient:
             params=params,
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return EntityListResponse.model_validate(response.json())
 
     async def read_entity(
@@ -172,7 +173,7 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        params: dict[str, Any] = {}
+        params: dict[str, int] = {}
         if version is not None:
             params["version"] = version
 
@@ -181,7 +182,7 @@ class StoreClient:
             params=params if params else None,
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return Entity.model_validate(response.json())
 
     async def get_versions(self, entity_id: int) -> list[EntityVersion]:
@@ -203,9 +204,9 @@ class StoreClient:
             f"{self._base_url}/entities/{entity_id}/versions",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        version_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]  # Validated by Pydantic
-        return [EntityVersion.model_validate(v) for v in version_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[EntityVersion])
+        return adapter.validate_python(response.json())
 
     async def get_entity_faces(self, entity_id: int) -> list[FaceResponse]:
         """Get all detected faces for an entity.
@@ -226,9 +227,9 @@ class StoreClient:
             f"{self._base_url}/entities/{entity_id}/faces",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
-        return [FaceResponse.model_validate(f) for f in faces_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceResponse])
+        return adapter.validate_python(response.json())
 
     async def download_face_embedding(self, face_id: int, dest: Path) -> None:
         """Download face embedding from Qdrant vector store.
@@ -247,10 +248,10 @@ class StoreClient:
             f"{self._base_url}/faces/{face_id}/embedding",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         # Write .npy file content to destination
-        dest.write_bytes(response.content)
+        _ = dest.write_bytes(response.content)
 
     async def download_entity_embedding(self, entity_id: int, dest: Path) -> None:
         """Download entity CLIP embedding from Qdrant vector store.
@@ -269,10 +270,10 @@ class StoreClient:
             f"{self._base_url}/entities/{entity_id}/embedding",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         # Write .npy file content to destination
-        dest.write_bytes(response.content)
+        _ = dest.write_bytes(response.content)
 
     async def get_entity_jobs(self, entity_id: int) -> list[EntityJobResponse]:
         """Get all compute jobs for an entity.
@@ -293,9 +294,9 @@ class StoreClient:
             f"{self._base_url}/entities/{entity_id}/jobs",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        jobs_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
-        return [EntityJobResponse.model_validate(j) for j in jobs_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[EntityJobResponse])
+        return adapter.validate_python(response.json())
 
     async def find_similar_images(
         self,
@@ -321,7 +322,7 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        params: dict[str, Any] = {
+        params: dict[str, int | float | bool] = {
             "limit": limit,
             "score_threshold": score_threshold,
             "include_details": include_details,
@@ -332,7 +333,7 @@ class StoreClient:
             params=params,
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return SimilarImagesResponse.model_validate(response.json())
 
     # Write operations (use multipart/form-data)
@@ -375,24 +376,22 @@ class StoreClient:
             data["parent_id"] = str(parent_id)
 
         # Handle file upload
-        files: dict[str, Any] = {}
-        file_handle = None
-        try:
-            if image_path is not None:
-                file_handle = open(image_path, "rb")
-                files["image"] = file_handle
+        multipart = None
+        if image_path:
+            multipart = HttpUtils.open_multipart_files({"image": Path(image_path)})
 
+        try:
             response = await self._client.post(
                 f"{self._base_url}/entities",
                 data=data,
-                files=files if files else None,
+                files=multipart,
                 headers=self._get_headers(),
             )
-            response.raise_for_status()
+            _ = response.raise_for_status()
             return Entity.model_validate(response.json())
         finally:
-            if file_handle:
-                file_handle.close()
+            if multipart:
+                HttpUtils.close_multipart_files(multipart)
 
     async def update_entity(
         self,
@@ -433,24 +432,23 @@ class StoreClient:
             data["parent_id"] = str(parent_id)
 
         # Handle file upload
-        files: dict[str, Any] = {}
-        file_handle = None
-        try:
-            if image_path is not None:
-                file_handle = open(image_path, "rb")
-                files["image"] = file_handle
 
+        multipart = None
+        if image_path:
+            multipart = HttpUtils.open_multipart_files({"image": Path(image_path)})
+
+        try:
             response = await self._client.put(
                 f"{self._base_url}/entities/{entity_id}",
                 data=data,
-                files=files if files else None,
+                files=multipart,
                 headers=self._get_headers(),
             )
-            response.raise_for_status()
+            _ = response.raise_for_status()
             return Entity.model_validate(response.json())
         finally:
-            if file_handle:
-                file_handle.close()
+            if multipart:
+                HttpUtils.close_multipart_files(multipart)
 
     async def patch_entity(
         self,
@@ -496,7 +494,7 @@ class StoreClient:
             data=data,  # Form data, not JSON
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return Entity.model_validate(response.json())
 
     async def delete_entity(self, entity_id: int) -> None:
@@ -515,7 +513,7 @@ class StoreClient:
             f"{self._base_url}/entities/{entity_id}",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
     async def delete_all_entities(self) -> None:
         """Delete all entities (use with caution).
@@ -530,7 +528,7 @@ class StoreClient:
             f"{self._base_url}/entities",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
     # Admin operations
 
@@ -550,7 +548,7 @@ class StoreClient:
             f"{self._base_url}/admin/config",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return StoreConfig.model_validate(response.json())
 
     async def update_guest_mode(self, guest_mode: bool) -> bool:
@@ -562,7 +560,7 @@ class StoreClient:
             guest_mode: Whether to enable guest mode (true = no authentication required)
 
         Returns:
-            Dictionary with guest_mode status and message
+            True if the update was successful
 
         Raises:
             httpx.HTTPStatusError: If the request fails (401, 403, etc.)
@@ -579,31 +577,8 @@ class StoreClient:
             data=data,  # Form data, not JSON
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return True
-
-    async def update_read_auth(self, enabled: bool) -> StoreConfig:
-        """Update read authentication configuration (admin only).
-
-        DEPRECATED: Use update_guest_mode() instead.
-        This method is kept for backward compatibility.
-
-        Note: Uses multipart/form-data, NOT JSON.
-
-        Args:
-            enabled: Whether to enable read authentication
-
-        Returns:
-            Updated StoreConfig model
-
-        Raises:
-            httpx.HTTPStatusError: If the request fails (401, 403, etc.)
-        """
-        # Convert enabled to guest_mode (inverted logic)
-        guest_mode = not enabled
-        _ = await self.update_guest_mode(guest_mode)
-        # Get updated config to return StoreConfig
-        return await self.get_config()
 
     # Face recognition and similarity search endpoints
 
@@ -629,7 +604,7 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        params: dict[str, Any] = {
+        params: dict[str, int | float] = {
             "limit": limit,
             "threshold": threshold,
         }
@@ -639,7 +614,7 @@ class StoreClient:
             params=params,
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return SimilarFacesResponse.model_validate(response.json())
 
     async def get_face_matches(self, face_id: int) -> list[FaceMatchResult]:
@@ -661,9 +636,9 @@ class StoreClient:
             f"{self._base_url}/faces/{face_id}/matches",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        matches_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
-        return [FaceMatchResult.model_validate(m) for m in matches_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceMatchResult])
+        return adapter.validate_python(response.json())
 
     async def get_all_known_persons(self) -> list[KnownPersonResponse]:
         """Get all known persons (identified by face recognition).
@@ -681,9 +656,9 @@ class StoreClient:
             f"{self._base_url}/known-persons",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        persons_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
-        return [KnownPersonResponse.model_validate(p) for p in persons_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[KnownPersonResponse])
+        return adapter.validate_python(response.json())
 
     async def get_known_person(self, person_id: int) -> KnownPersonResponse:
         """Get details of a specific known person.
@@ -704,7 +679,7 @@ class StoreClient:
             f"{self._base_url}/known-persons/{person_id}",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return KnownPersonResponse.model_validate(response.json())
 
     async def get_known_person_faces(self, person_id: int) -> list[FaceResponse]:
@@ -726,9 +701,9 @@ class StoreClient:
             f"{self._base_url}/known-persons/{person_id}/faces",
             headers=self._get_headers(),
         )
-        response.raise_for_status()
-        faces_data: list[dict[str, object]] = response.json()  # type: ignore[reportAny]
-        return [FaceResponse.model_validate(f) for f in faces_data]
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceResponse])
+        return adapter.validate_python(response.json())
 
     async def update_known_person_name(self, person_id: int, name: str) -> KnownPersonResponse:
         """Update the name of a known person.
@@ -754,5 +729,5 @@ class StoreClient:
             json=body,
             headers=self._get_headers(),
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         return KnownPersonResponse.model_validate(response.json())

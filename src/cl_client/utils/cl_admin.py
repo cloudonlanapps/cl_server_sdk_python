@@ -40,12 +40,12 @@ Usage:
 
 import asyncio
 import sys
-from typing import Any, cast
 
 import click
 import httpx
 from pydantic import BaseModel
 
+from cl_client import ComputeClient
 from cl_client.auth import JWTAuthProvider
 from cl_client.auth_client import AuthClient
 from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
@@ -339,9 +339,8 @@ async def _get_guest_mode_compute(compute_url: str) -> None:
     """Get compute guest mode status."""
     async with httpx.AsyncClient() as client:
         r = await client.get(compute_url)
-        r.raise_for_status()
-        info_raw = cast(dict[str, Any], r.json())
-        info = ServerRootResponse.model_validate(info_raw)
+        _ = r.raise_for_status()
+        info = ServerRootResponse.model_validate(r.json())
         status = "ENABLED" if info.guestMode == "on" else "DISABLED"
         click.echo(f"Compute guest mode: {status}")
 
@@ -355,7 +354,7 @@ async def _set_guest_mode_store(
 
         auth_provider = JWTAuthProvider(token=token_resp.access_token)
         async with StoreClient(base_url=store_url, auth_provider=auth_provider) as store_client:
-            await store_client.update_read_auth(enabled=enabled)
+            _ = await store_client.update_guest_mode(guest_mode=enabled)
             status = "ENABLED" if enabled else "DISABLED"
             click.echo(f"✓ Store guest mode {status}")
 
@@ -363,12 +362,17 @@ async def _set_guest_mode_store(
 async def _set_guest_mode_compute(
     auth_url: str, compute_url: str, username: str, password: str, enabled: bool
 ) -> None:
-    """Enable or disable compute guest mode."""
-    # Note: Implementation depends on compute service API
-    # This is a placeholder - adjust based on actual compute service API
-    click.echo("⚠ Compute guest mode configuration not yet implemented")
-    click.echo("  Please configure compute guest mode via server configuration or admin API")
-    sys.exit(1)
+    """Enable or disable store guest mode."""
+    async with AuthClient(base_url=auth_url) as auth_client:
+        token_resp = await auth_client.login(username, password)
+
+        auth_provider = JWTAuthProvider(token=token_resp.access_token)
+        async with ComputeClient(
+            base_url=compute_url, auth_provider=auth_provider
+        ) as compute_client:
+            _ = await compute_client.update_guest_mode(guest_mode=enabled)
+            status = "ENABLED" if enabled else "DISABLED"
+            click.echo(f"✓ Compute guest mode {status}")
 
 
 if __name__ == "__main__":

@@ -9,15 +9,41 @@ Provides common functionality for all plugin clients:
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import Protocol
+
+from httpx._types import RequestData, RequestFiles
 
 from ..config import ComputeClientConfig
-from ..models import OnJobResponseCallback
+from ..http_utils import HttpUtils
+from ..models import JobResponse, OnJobResponseCallback
 
-if TYPE_CHECKING:
-    from ..compute_client import ComputeClient
-    from ..models import JobResponse
+
+class ClientProtocol(Protocol):
+    def http_submit_job(
+        self,
+        endpoint: str,
+        data: RequestData | None,
+        files: RequestFiles | None,
+    ) -> Awaitable[str]: ...
+
+    def get_job(self, job_id: str) -> Awaitable[JobResponse]: ...
+    def wait_for_job(
+        self,
+        job_id: str,
+        poll_interval: float | None = None,
+        timeout: float | None = None,
+    ) -> Awaitable[JobResponse]: ...
+
+    def mqtt_subscribe_job_updates(
+        self,
+        job_id: str,
+        on_progress: OnJobResponseCallback = None,
+        on_complete: OnJobResponseCallback = None,
+    ) -> str: ...
+
+    pass
 
 
 class BasePluginClient:
@@ -27,14 +53,14 @@ class BasePluginClient:
     Handles job submission, file uploads, and monitoring.
     """
 
-    def __init__(self, client: ComputeClient, task_type: str) -> None:
+    def __init__(self, client: ClientProtocol, task_type: str) -> None:
         """Initialize plugin client.
 
         Args:
-            client: ComputeClient instance
+            client: ClientProtocol instance
             task_type: Plugin task type (used to lookup endpoint from config)
         """
-        self.client = client
+        self.client: ClientProtocol = client
         self.task_type: str = task_type
 
         # Get endpoint from config (NOT hardcoded)
@@ -127,55 +153,23 @@ class BasePluginClient:
                 timeout=30.0
             )
         """
-        # Prepare multipart file uploads
-        files_data: dict[str, tuple[str, object, str]] = {}
-        for name, path in files.items():
-            if not path.exists():
-                msg = f"File not found: {path}"
-                raise FileNotFoundError(msg)
-
-            files_data[name] = (
-                path.name,
-                path.open("rb"),
-                self._guess_mime_type(path),
-            )
 
         # Prepare form data
-        form_data: dict[str, object] = {"priority": str(priority)}
-        if params:
-            # Flatten params into form fields
-            for key, value in params.items():
-                form_data[key] = str(value) if value is not None else ""
-
+        multipart = HttpUtils.open_multipart_files(files)
         try:
             # Submit job (accessing protected _session is intentional for plugin clients)
-            response = await self.client._session.post(  # type: ignore[reportPrivateUsage]
+            job_id = await self.client.http_submit_job(  # type: ignore[reportPrivateUsage]
                 self.endpoint,
-                files=files_data,  # type: ignore[arg-type]
-                data=form_data,
+                files=multipart,  # type: ignore[arg-type]
+                data=HttpUtils.build_form_data(params, priority),
             )
-            response.raise_for_status()
-
-            # Parse response - may be minimal (just job_id)
-            data_raw: object = response.json()  # type: ignore[misc]
-            if not isinstance(data_raw, dict):
-                msg = f"Invalid response format: expected dict, got {type(data_raw)}"
-                raise ValueError(msg)
-
-            data = cast(dict[str, object], data_raw)
-
-            # Get job_id from response
-            job_id = str(data.get("job_id", ""))
-            if not job_id:
-                msg = "Server response missing job_id"
-                raise ValueError(msg)
 
             # Fetch full job details (submission response may be minimal)
             job = await self.client.get_job(job_id)
 
             # Subscribe to MQTT callbacks if provided
             if on_progress or on_complete:
-                self.client.subscribe_job_updates(
+                _ = self.client.mqtt_subscribe_job_updates(
                     job_id=job.job_id, on_progress=on_progress, on_complete=on_complete
                 )
 
@@ -186,22 +180,4 @@ class BasePluginClient:
             return job
 
         finally:
-            # Close file handles
-            for _name, file_tuple in files_data.items():
-                file_handle = file_tuple[1]
-                if hasattr(file_handle, "close"):
-                    file_handle.close()  # type: ignore[union-attr]
-
-    def _guess_mime_type(self, path: Path) -> str:
-        """Guess MIME type from file extension.
-
-        Args:
-            path: File path
-
-        Returns:
-            MIME type string
-        """
-        import mimetypes
-
-        mime_type, _ = mimetypes.guess_type(str(path))
-        return mime_type or "application/octet-stream"
+            HttpUtils.close_multipart_files(multipart)

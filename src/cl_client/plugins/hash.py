@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from .base import BasePluginClient
-
-if TYPE_CHECKING:
-    from ..compute_client import ComputeClient
-    from ..models import JobResponse, OnJobResponseCallback
+from ..models import JobResponse, OnJobResponseCallback
+from .base import BasePluginClient, ClientProtocol
 
 
 class HashClient(BasePluginClient):
@@ -18,7 +14,7 @@ class HashClient(BasePluginClient):
     Computes perceptual hashes (phash, dhash) for duplicate detection and similarity matching.
     """
 
-    def __init__(self, client: ComputeClient) -> None:
+    def __init__(self, client: ClientProtocol) -> None:
         """Initialize hash client.
 
         Args:

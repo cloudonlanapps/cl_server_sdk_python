@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, override
 
 import httpx
+from httpx._types import RequestData, RequestFiles
+from pydantic import BaseModel
+
+from cl_client.plugins.base import ClientProtocol
 
 from .auth import AuthProvider, NoAuthProvider
 from .config import ComputeClientConfig
@@ -35,7 +39,13 @@ if TYPE_CHECKING:
     from .plugins.media_thumbnail import MediaThumbnailClient
 
 
-class ComputeClient:
+class JobCreatedResponse(BaseModel):
+    job_id: str
+    status: str
+    task_type: str
+
+
+class ComputeClient(ClientProtocol):
     """Main client for interacting with compute service.
 
     Provides:
@@ -80,12 +90,12 @@ class ComputeClient:
         config = server_config or ServerConfig.from_env()
 
         # Use explicit parameters if provided, otherwise fall back to config
-        self.base_url = base_url or config.compute_url
-        self.timeout = timeout or ComputeClientConfig.DEFAULT_TIMEOUT
-        self.auth = auth_provider or NoAuthProvider()
+        self.base_url: str = base_url or config.compute_url
+        self.timeout: float = timeout or ComputeClientConfig.DEFAULT_TIMEOUT
+        self.auth: AuthProvider = auth_provider or NoAuthProvider()
 
         # HTTP client for REST API
-        self._session = httpx.AsyncClient(
+        self._session: httpx.AsyncClient = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=self.timeout,
             headers=self.auth.get_headers(),
@@ -95,12 +105,57 @@ class ComputeClient:
         # Use explicit parameters if provided, otherwise fall back to config
         mqtt_broker_final = mqtt_broker or config.mqtt_broker
         mqtt_port_final = mqtt_port or config.mqtt_port
-        self._mqtt = MQTTJobMonitor(broker=mqtt_broker_final, port=mqtt_port_final)
+        self._mqtt: MQTTJobMonitor = MQTTJobMonitor(broker=mqtt_broker_final, port=mqtt_port_final)
+
+    async def update_guest_mode(self, guest_mode: bool) -> bool:
+        """Update guest mode configuration (admin only).
+
+        Note: Uses multipart/form-data, NOT JSON.
+
+        Args:
+            guest_mode: Whether to enable guest mode (true = no authentication required)
+
+        Returns:
+            True if the update was successful
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (401, 403, etc.)
+        """
+        if not self._session:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data = {
+            "guest_mode": str(guest_mode).lower(),
+        }
+
+        response = await self._session.put(
+            f"{self.base_url}/admin/config/guest-mode",
+            data=data,  # Form data, not JSON
+            headers=self.auth.get_headers(),
+        )
+        _ = response.raise_for_status()
+        return True
 
     # ============================================================================
     # Job Management (REST API)
     # ============================================================================
+    @override
+    async def http_submit_job(
+        self,
+        endpoint: str,
+        data: RequestData | None,
+        files: RequestFiles | None,
+    ) -> str:
+        response = await self._session.post(  # type: ignore[reportPrivateUsage]
+            endpoint,
+            files=files,  # type: ignore[arg-type]
+            data=data,
+        )
+        _ = response.raise_for_status()
+        job = JobCreatedResponse.model_validate(response.json())
+        return job.job_id
 
+    @override
     async def get_job(self, job_id: str) -> JobResponse:
         """Get job status via REST API.
 
@@ -117,16 +172,9 @@ class ComputeClient:
 
         endpoint = ComputeClientConfig.ENDPOINT_GET_JOB.format(job_id=job_id)
         response = await self._session.get(endpoint)
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
-        # response.json() returns Any, validate and cast
-        data_raw: object = response.json()  # type: ignore[misc]
-        if not isinstance(data_raw, dict):
-            msg = f"Invalid response format: expected dict, got {type(data_raw)}"
-            raise ValueError(msg)
-
-        data = cast(dict[str, object], data_raw)
-        return JobResponse(**data)  # type: ignore[arg-type]
+        return JobResponse.model_validate(response.json())  # type: ignore[arg-type]
 
     async def delete_job(self, job_id: str) -> None:
         """Delete job via REST API.
@@ -139,7 +187,7 @@ class ComputeClient:
         """
         endpoint = ComputeClientConfig.ENDPOINT_DELETE_JOB.format(job_id=job_id)
         response = await self._session.delete(endpoint)
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
     async def download_job_file(self, job_id: str, file_path: str, dest: Path) -> None:
         """Download file from job's output directory.
@@ -156,10 +204,10 @@ class ComputeClient:
             job_id=job_id, file_path=file_path
         )
         response = await self._session.get(endpoint)
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
         # Write file content to destination
-        dest.write_bytes(response.content)
+        _ = dest.write_bytes(response.content)
 
     # ============================================================================
     # Worker Capabilities (REST API)
@@ -178,16 +226,9 @@ class ComputeClient:
 
         endpoint = ComputeClientConfig.ENDPOINT_CAPABILITIES
         response = await self._session.get(endpoint)
-        response.raise_for_status()
+        _ = response.raise_for_status()
 
-        # response.json() returns Any, validate and cast
-        data_raw: object = response.json()  # type: ignore[misc]
-        if not isinstance(data_raw, dict):
-            msg = f"Invalid response format: expected dict, got {type(data_raw)}"
-            raise ValueError(msg)
-
-        data = cast(dict[str, object], data_raw)
-        return WorkerCapabilitiesResponse(**data)  # type: ignore[arg-type]
+        return WorkerCapabilitiesResponse.model_validate(response.json())  # type: ignore[arg-type]
 
     async def wait_for_workers(
         self,
@@ -213,7 +254,7 @@ class ComputeClient:
 
         # Wait for each required capability
         for capability in required_capabilities:
-            await self._mqtt.wait_for_capability(capability, timeout=timeout_val)
+            _ = await self._mqtt.wait_for_capability(capability, timeout=timeout_val)
 
         return True
 
@@ -221,7 +262,8 @@ class ComputeClient:
     # Job Monitoring - MQTT (PRIMARY WORKFLOW)
     # ============================================================================
 
-    def subscribe_job_updates(
+    @override
+    def mqtt_subscribe_job_updates(
         self,
         job_id: str,
         on_progress: OnJobResponseCallback = None,
@@ -264,6 +306,7 @@ class ComputeClient:
     # Job Monitoring - HTTP Polling (SECONDARY WORKFLOW)
     # ============================================================================
 
+    @override
     async def wait_for_job(
         self,
         job_id: str,
@@ -331,7 +374,7 @@ class ComputeClient:
         if not hasattr(self, "_clip_embedding"):
             from .plugins.clip_embedding import ClipEmbeddingClient
 
-            self._clip_embedding = ClipEmbeddingClient(self)
+            self._clip_embedding: ClipEmbeddingClient = ClipEmbeddingClient(self)
         return self._clip_embedding  # type: ignore[has-type]
 
     @property
@@ -351,7 +394,7 @@ class ComputeClient:
         if not hasattr(self, "_dino_embedding"):
             from .plugins.dino_embedding import DinoEmbeddingClient
 
-            self._dino_embedding = DinoEmbeddingClient(self)
+            self._dino_embedding: DinoEmbeddingClient = DinoEmbeddingClient(self)
         return self._dino_embedding  # type: ignore[has-type]
 
     @property
@@ -371,7 +414,7 @@ class ComputeClient:
         if not hasattr(self, "_exif"):
             from .plugins.exif import ExifClient
 
-            self._exif = ExifClient(self)
+            self._exif: ExifClient = ExifClient(self)
         return self._exif  # type: ignore[has-type]
 
     @property
@@ -391,7 +434,7 @@ class ComputeClient:
         if not hasattr(self, "_face_detection"):
             from .plugins.face_detection import FaceDetectionClient
 
-            self._face_detection = FaceDetectionClient(self)
+            self._face_detection: FaceDetectionClient = FaceDetectionClient(self)
         return self._face_detection  # type: ignore[has-type]
 
     @property
@@ -411,7 +454,7 @@ class ComputeClient:
         if not hasattr(self, "_face_embedding"):
             from .plugins.face_embedding import FaceEmbeddingClient
 
-            self._face_embedding = FaceEmbeddingClient(self)
+            self._face_embedding: FaceEmbeddingClient = FaceEmbeddingClient(self)
         return self._face_embedding  # type: ignore[has-type]
 
     @property
@@ -431,7 +474,7 @@ class ComputeClient:
         if not hasattr(self, "_hash"):
             from .plugins.hash import HashClient
 
-            self._hash = HashClient(self)
+            self._hash: HashClient = HashClient(self)
         return self._hash  # type: ignore[has-type]
 
     @property
@@ -451,7 +494,7 @@ class ComputeClient:
         if not hasattr(self, "_hls_streaming"):
             from .plugins.hls_streaming import HlsStreamingClient
 
-            self._hls_streaming = HlsStreamingClient(self)
+            self._hls_streaming: HlsStreamingClient = HlsStreamingClient(self)
         return self._hls_streaming  # type: ignore[has-type]
 
     @property
@@ -473,7 +516,7 @@ class ComputeClient:
         if not hasattr(self, "_image_conversion"):
             from .plugins.image_conversion import ImageConversionClient
 
-            self._image_conversion = ImageConversionClient(self)
+            self._image_conversion: ImageConversionClient = ImageConversionClient(self)
         return self._image_conversion  # type: ignore[has-type]
 
     @property
@@ -493,7 +536,7 @@ class ComputeClient:
         if not hasattr(self, "_media_thumbnail"):
             from .plugins.media_thumbnail import MediaThumbnailClient
 
-            self._media_thumbnail = MediaThumbnailClient(self)
+            self._media_thumbnail: MediaThumbnailClient = MediaThumbnailClient(self)
         return self._media_thumbnail  # type: ignore[has-type]
 
     # ============================================================================

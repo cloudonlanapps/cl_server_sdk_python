@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from .base import BasePluginClient
-
-if TYPE_CHECKING:
-    from ..compute_client import ComputeClient
-    from ..models import JobResponse, OnJobResponseCallback
+from ..models import JobResponse, OnJobResponseCallback
+from .base import BasePluginClient, ClientProtocol
 
 
 class DinoEmbeddingClient(BasePluginClient):
@@ -18,7 +14,7 @@ class DinoEmbeddingClient(BasePluginClient):
     Generates 384-dimensional DINO embeddings from images using Facebook's DINO model.
     """
 
-    def __init__(self, client: ComputeClient) -> None:
+    def __init__(self, client: ClientProtocol) -> None:
         """Initialize DINO embedding client.
 
         Args:

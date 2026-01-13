@@ -147,7 +147,7 @@ def test_two_callback_system(monitor, mock_mqtt_client):
     job_in_progress = JobResponse(
         job_id=job_id,
         task_type="test_task",
-        status="in_progress",
+        status="processing",
         progress=50,
         created_at=1234567890,
     )
@@ -158,7 +158,7 @@ def test_two_callback_system(monitor, mock_mqtt_client):
     mock_msg.payload = json.dumps(
         {
             "job_id": job_id,
-            "event_type": "in_progress",
+            "event_type": "processing",
             "progress": 50,
             "timestamp": 1234567890,
         }

@@ -419,7 +419,7 @@ async def download_job_file(
     """
     endpoint = f"/jobs/{job_id}/files/{file_path}"
     response = await self._session.get(endpoint)
-    response.raise_for_status()
+    _ = response.raise_for_status()
     dest.write_bytes(response.content)
 ```
 

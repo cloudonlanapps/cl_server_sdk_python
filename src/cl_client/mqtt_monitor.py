@@ -12,17 +12,28 @@ import logging
 import threading
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, cast
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
+from paho.mqtt.properties import Properties
+from paho.mqtt.reasoncodes import ReasonCode
+from pydantic import BaseModel
 
 from .config import ComputeClientConfig
-from .models import OnJobResponseCallback  # type: ignore[import-untyped]
-
-if TYPE_CHECKING:
-    from .models import JobResponse, WorkerCapability
+from .models import (
+    JobResponse,
+    OnJobResponseCallback,  # type: ignore[import-untyped]
+    WorkerCapability,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class JobEventPayload(BaseModel):
+    job_id: str
+    event_type: str
+    timestamp: int
+    progress: int | float | None = None
 
 
 class MQTTJobMonitor:
@@ -41,8 +52,8 @@ class MQTTJobMonitor:
             port: MQTT broker port (default from config)
             connect_timeout: Timeout for initial connection in seconds (default 5.0)
         """
-        self.broker = broker or ComputeClientConfig.MQTT_BROKER_HOST
-        self.port = port or ComputeClientConfig.MQTT_BROKER_PORT
+        self.broker: str = broker or ComputeClientConfig.MQTT_BROKER_HOST
+        self.port: int = port or ComputeClientConfig.MQTT_BROKER_PORT
 
         # Job subscriptions: subscription_id -> (job_id, callbacks)
         self._job_subscriptions: dict[
@@ -59,18 +70,18 @@ class MQTTJobMonitor:
         self._worker_callbacks: list[Callable[[str, WorkerCapability | None], None]] = []
 
         # Connection event for blocking until connected
-        self._connect_event = threading.Event()
-        self._connected = False
+        self._connect_event: threading.Event = threading.Event()
+        self._connected: bool = False
 
         # Event loop for scheduling async callbacks from MQTT thread
         try:
-            self._event_loop = asyncio.get_running_loop()
+            self._event_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
         except RuntimeError:
             # No running loop, will be set when connect() is called
             self._event_loop = None
 
         # MQTT client
-        self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)  # type: ignore[attr-defined]
+        self._client: mqtt.Client = mqtt.Client(CallbackAPIVersion.VERSION2)  # type: ignore[attr-defined]
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
 
@@ -86,8 +97,8 @@ class MQTTJobMonitor:
     def _connect(self) -> None:
         """Connect to MQTT broker."""
         try:
-            self._client.connect(self.broker, self.port, keepalive=60)
-            self._client.loop_start()
+            _ = self._client.connect(self.broker, self.port, keepalive=60)
+            _ = self._client.loop_start()
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             raise
@@ -97,8 +108,8 @@ class MQTTJobMonitor:
         client: mqtt.Client,
         userdata: object,
         flags: mqtt.ConnectFlags,  # type: ignore[name-defined]
-        rc: mqtt.ReasonCode,  # type: ignore[name-defined]
-        properties: mqtt.Properties | None = None,  # type: ignore[name-defined]
+        rc: ReasonCode,  # type: ignore[name-defined]
+        properties: Properties | None = None,  # type: ignore[name-defined]
     ) -> None:
         """Handle MQTT connection."""
         _ = (client, userdata, flags, properties)
@@ -111,12 +122,12 @@ class MQTTJobMonitor:
 
             # Subscribe to worker capabilities
             capability_topic = f"{ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX}/+"
-            self._client.subscribe(capability_topic)
+            _ = self._client.subscribe(capability_topic)
             logger.debug(f"Subscribed to worker capabilities: {capability_topic}")
 
             # Subscribe to job events (single topic for all jobs)
             events_topic = ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC
-            self._client.subscribe(events_topic)
+            _ = self._client.subscribe(events_topic)
             logger.debug(f"Subscribed to job events: {events_topic}")
 
         # Signal connection attempt complete (success or failure)
@@ -147,44 +158,9 @@ class MQTTJobMonitor:
         # Parse capability message
         try:
             # json.loads returns Any, which we validate immediately
-            if not isinstance(
-                data_parsed := json.loads(msg.payload.decode()),  # type: ignore[misc]
-                dict,
-            ):
-                logger.warning("Invalid worker capability message: not a dict")
-                return
-
-            # Safe to cast after isinstance check
-            data = cast(dict[str, object], data_parsed)
-
             from .models import WorkerCapability
 
-            # Extract and validate capabilities list
-            caps_raw = data.get("capabilities", [])
-            if not isinstance(caps_raw, list):
-                caps_raw = []
-            # Cast to list[object] for iteration
-            caps_list = cast(list[object], caps_raw)
-            capabilities_list: list[str] = []
-            for item in caps_list:
-                if item is not None:
-                    capabilities_list.append(str(item))
-
-            # Extract and validate other fields
-            capability = WorkerCapability(
-                worker_id=str(data.get("id", "")) if data.get("id") is not None else "",
-                capabilities=capabilities_list,
-                idle_count=(
-                    int(idle_val)
-                    if isinstance(idle_val := data.get("idle_count", 0), (int, float))
-                    else 0
-                ),
-                timestamp=(
-                    int(ts_val)
-                    if isinstance(ts_val := data.get("timestamp", 0), (int, float))
-                    else 0
-                ),
-            )
+            capability = WorkerCapability.model_validate_json(msg.payload.decode())
 
             self._update_worker(capability)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
@@ -197,42 +173,14 @@ class MQTTJobMonitor:
 
         try:
             # Parse event message
-            if not isinstance(
-                data_parsed := json.loads(msg.payload.decode()),  # type: ignore[misc]
-                dict,
-            ):
-                logger.warning("Invalid job event message: not a dict")
-                return
 
-            data = cast(dict[str, object], data_parsed)
-
-            # Extract event fields
-            job_id_val = data.get("job_id")
-            event_type_val = data.get("event_type")
-            progress_val = data.get("progress", 0)
-            timestamp_val = data.get("timestamp", 0)
-
-            if not job_id_val or not event_type_val:
-                logger.warning("Job event missing required fields")
-                return
-
-            job_id = str(job_id_val)
-            event_type = str(event_type_val)
-
-            # Map event_type to status
-            status_map = {
-                "queued": "queued",
-                "processing": "in_progress",
-                "completed": "completed",
-                "failed": "failed",
-            }
-            status = status_map.get(event_type, event_type)
+            updateMsg = JobEventPayload.model_validate_json(msg.payload.decode())
 
             # Find matching subscriptions for this job
             for _sub_id, (sub_job_id, on_progress, on_complete) in list(
                 self._job_subscriptions.items()
             ):
-                if sub_job_id != job_id:
+                if sub_job_id != updateMsg.job_id:
                     continue
 
                 # Create minimal JobResponse from event data
@@ -240,11 +188,15 @@ class MQTTJobMonitor:
                 from .models import JobResponse
 
                 job = JobResponse(
-                    job_id=job_id,
+                    job_id=updateMsg.job_id,
                     task_type="unknown",  # Not in event message
-                    status=status,
-                    progress=int(progress_val) if isinstance(progress_val, (int, float)) else 0,
-                    created_at=int(timestamp_val) if isinstance(timestamp_val, (int, float)) else 0,
+                    status=updateMsg.event_type,
+                    progress=int(updateMsg.progress)
+                    if isinstance(updateMsg.progress, (int, float))
+                    else 0,
+                    created_at=int(updateMsg.timestamp)
+                    if isinstance(updateMsg, (int, float))
+                    else 0,
                     params={},
                     task_output=None,
                     error_message=None,
@@ -263,18 +215,20 @@ class MQTTJobMonitor:
                         if inspect.iscoroutinefunction(on_progress):
                             # Schedule coroutine on event loop from MQTT thread
                             if self._event_loop and self._event_loop.is_running():
-                                asyncio.run_coroutine_threadsafe(on_progress(job), self._event_loop)
+                                _ = asyncio.run_coroutine_threadsafe(
+                                    on_progress(job), self._event_loop
+                                )
                             else:
                                 logger.warning(
                                     "Event loop not available for async on_progress callback"
                                 )
                         else:
-                            on_progress(job)
+                            _ = on_progress(job)
                     except Exception as e:
                         logger.error(f"Error in on_progress callback: {e}", exc_info=True)
 
                 # Call on_complete callback only for terminal states
-                if status in ["completed", "failed"] and on_complete:
+                if updateMsg.event_type in ["completed", "failed"] and on_complete:
                     try:
                         # Support both sync and async callbacks
                         import inspect
@@ -282,13 +236,15 @@ class MQTTJobMonitor:
                         if inspect.iscoroutinefunction(on_complete):
                             # Schedule coroutine on event loop from MQTT thread
                             if self._event_loop and self._event_loop.is_running():
-                                asyncio.run_coroutine_threadsafe(on_complete(job), self._event_loop)
+                                _ = asyncio.run_coroutine_threadsafe(
+                                    on_complete(job), self._event_loop
+                                )
                             else:
                                 logger.warning(
                                     "Event loop not available for async on_complete callback"
                                 )
                         else:
-                            on_complete(job)
+                            _ = on_complete(job)
                     except Exception as e:
                         logger.error(f"Error in on_complete callback: {e}", exc_info=True)
 
@@ -440,7 +396,7 @@ class MQTTJobMonitor:
 
     def close(self) -> None:
         """Close MQTT connection and cleanup."""
-        self._client.loop_stop()
-        self._client.disconnect()
+        _ = self._client.loop_stop()
+        _ = self._client.disconnect()
         self._connected = False
         logger.info("MQTT monitor closed")

@@ -268,7 +268,7 @@ async def test_wait_for_job_success(client, mock_httpx_client):
     job_in_progress = {
         "job_id": "test-123",
         "task_type": "test",
-        "status": "in_progress",
+        "status": "processing",
         "progress": 50,
         "created_at": 1234567890,
         "params": {},
@@ -303,7 +303,7 @@ async def test_wait_for_job_timeout(client, mock_httpx_client):
     job_data = {
         "job_id": "test-123",
         "task_type": "test",
-        "status": "in_progress",
+        "status": "processing",
         "progress": 50,
         "created_at": 1234567890,
         "params": {},
