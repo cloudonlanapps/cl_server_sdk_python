@@ -240,19 +240,48 @@ class RootResponse(BaseModel):
     guestMode: str = Field(..., description="Guest mode status (on/off)")
 
 
+class BBox(BaseModel):
+    """Bounding box coordinates [x1, y1, x2, y2]."""
+
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+    def to_list(self) -> list[float]:
+        """Convert to list format [x1, y1, x2, y2]."""
+        return [self.x1, self.y1, self.x2, self.y2]
+
+
+class Landmarks(BaseModel):
+    """Facial landmarks (keypoints)."""
+
+    left_eye: list[float] | None = None
+    right_eye: list[float] | None = None
+    nose_tip: list[float] | None = None
+    mouth_left: list[float] | None = None
+    mouth_right: list[float] | None = None
+
+    def to_list(self) -> list[list[float]]:
+        """Convert to list of lists format."""
+        return [
+            self.left_eye or [],
+            self.right_eye or [],
+            self.nose_tip or [],
+            self.mouth_left or [],
+            self.mouth_right or [],
+        ]
+
+
 # Face detection and job models
 class FaceResponse(BaseModel):
     """Response model for detected face."""
 
     id: int = Field(..., description="Face ID")
     entity_id: int = Field(..., description="Entity ID this face belongs to")
-    bbox: list[float] = Field(
-        ..., description="Normalized bounding box [x1, y1, x2, y2] in range [0.0, 1.0]"
-    )
+    bbox: BBox = Field(..., description="Bounding box coordinates")
     confidence: float = Field(..., description="Detection confidence score [0.0, 1.0]")
-    landmarks: list[list[float]] = Field(
-        ..., description="Five facial keypoints [[x1, y1], [x2, y2], ...]"
-    )
+    landmarks: Landmarks = Field(..., description="Facial keypoints")
     file_path: str = Field(..., description="Relative path to cropped face image")
     created_at: int = Field(..., description="Creation timestamp (milliseconds)")
     known_person_id: int | None = Field(None, description="Known person ID (face recognition)")

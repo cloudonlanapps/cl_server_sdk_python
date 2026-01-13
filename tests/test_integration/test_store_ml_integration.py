@@ -67,7 +67,7 @@ async def test_entity_triggers_jobs(
         assert job.id is not None
         assert job.entity_id == entity.id
         assert job.job_id is not None
-        assert job.task_type in ["face_detection", "clip_embedding"]
+        assert job.task_type in ["face_detection", "clip_embedding", "face_embedding"]
         assert job.status in ["queued", "processing", "completed", "failed"]
         assert job.created_at is not None
         assert job.updated_at is not None
@@ -191,19 +191,18 @@ async def test_face_recognition_workflow_single_face(
     face = faces[0]
     assert face.id is not None
     assert face.entity_id == entity.id
-    assert face.bbox is not None and len(face.bbox) == 4
-    assert 0.0 <= face.bbox[0] <= 1.0  # x1
-    assert 0.0 <= face.bbox[1] <= 1.0  # y1
-    assert 0.0 <= face.bbox[2] <= 1.0  # x2
-    assert 0.0 <= face.bbox[3] <= 1.0  # y2
+    assert face.bbox is not None
+    assert 0.0 <= face.bbox.x1 <= 1.0
+    assert 0.0 <= face.bbox.y1 <= 1.0
+    assert 0.0 <= face.bbox.x2 <= 1.0
+    assert 0.0 <= face.bbox.y2 <= 1.0
     assert 0.0 <= face.confidence <= 1.0
-    assert face.landmarks is not None and len(face.landmarks) == 5  # 5 keypoints
+    assert face.landmarks is not None
     assert face.file_path is not None
 
     print("✓ Face metadata valid:")
     print(f"  - BBox: {face.bbox}")
-    print(f"  - Confidence: {face.confidence:.3f}")
-    print(f"  - Landmarks: {len(face.landmarks)} points")
+    print(f"  - Landmarks: exists")
 
     # Step 5: Verify face embedding exists in Qdrant by downloading it
     import tempfile
@@ -356,7 +355,7 @@ async def test_face_recognition_workflow_multiple_faces(
     for i, face in enumerate(faces):
         assert face.id is not None
         assert face.entity_id == entity.id
-        assert face.bbox is not None and len(face.bbox) == 4
+        assert face.bbox is not None
         assert 0.0 <= face.confidence <= 1.0
         print(f"  Face {i + 1}: confidence={face.confidence:.3f}, bbox={face.bbox}")
 

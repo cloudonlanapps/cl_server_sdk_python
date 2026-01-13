@@ -349,12 +349,17 @@ class TestStoreManagerAdminOperations:
     @pytest.mark.asyncio
     async def test_update_guest_mode_success(self, store_manager, mock_store_client):
         """Test updating guest mode configuration."""
-        mock_store_client.update_guest_mode.return_value = True
+        expected_config = StoreConfig(
+            guest_mode=True,
+            updated_at=1704067200000,
+            updated_by="admin",
+        )
+        mock_store_client.update_guest_mode.return_value = expected_config
 
         result = await store_manager.update_guest_mode(guest_mode=True)
 
         assert result.is_success
-        assert result.data is True
+        assert result.data == expected_config
         assert result.success == "Guest mode configuration updated successfully"
         mock_store_client.update_guest_mode.assert_called_once_with(guest_mode=True)
 

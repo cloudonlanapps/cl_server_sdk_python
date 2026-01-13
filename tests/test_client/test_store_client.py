@@ -339,14 +339,22 @@ class TestStoreClientAdminOperations:
         mock_put_response = Mock()
         mock_put_response.raise_for_status = Mock()
 
-        # Mock GET response for get_config() call after PUT (if needed, but update_guest_mode returns bool)
-        # Actually update_guest_mode just returns True.
+        # Mock GET response for get_config() call after PUT
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = {
+            "guest_mode": True,
+            "updated_at": 1704067200000,
+            "updated_by": "admin",
+        }
+        mock_get_response.raise_for_status = Mock()
 
         mock_httpx_client.put.return_value = mock_put_response
+        mock_httpx_client.get.return_value = mock_get_response
 
         result = await store_client.update_guest_mode(guest_mode=True)
 
-        assert result is True
+        assert isinstance(result, StoreConfig)
+        assert result.guest_mode is True
 
         # Verify multipart form data
         call_args = mock_httpx_client.put.call_args
