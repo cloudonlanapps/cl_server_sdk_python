@@ -64,6 +64,7 @@ addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fai
 [tool.coverage.run]
 source = ["src/cl_client"]
 omit = [
+    "*/src/cl_client/utils/*",
     "*/tests/*",
     "*/__pycache__/*",
     "*/venv/*",
