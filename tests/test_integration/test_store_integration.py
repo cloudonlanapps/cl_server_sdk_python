@@ -365,16 +365,15 @@ async def test_admin_update_read_auth(store_manager, auth_config: AuthConfig):
         original_guest_mode = get_result.data.guest_mode
 
         # Toggle guest mode
-        # Note: enabled parameter is inverted from guest_mode (enabled=False means guest_mode=True)
-        update_result = await store_manager.update_read_auth(enabled=original_guest_mode)
+        update_result = await store_manager.update_guest_mode(guest_mode=not original_guest_mode)
         assert update_result.is_success
         assert update_result.data.guest_mode == (not original_guest_mode)
 
         # Restore original setting
-        restore_result = await store_manager.update_read_auth(enabled=not original_guest_mode)
+        restore_result = await store_manager.update_guest_mode(guest_mode=original_guest_mode)
         assert restore_result.is_success
         assert restore_result.data.guest_mode == original_guest_mode
     else:
         # Should fail for non-admin
-        result = await store_manager.update_read_auth(enabled=True)
+        result = await store_manager.update_guest_mode(guest_mode=True)
         assert result.is_error

@@ -196,7 +196,7 @@ def test_worker_capability_tracking(monitor, mock_mqtt_client):
     mock_msg.topic = f"{ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX}/{worker_id}"
     mock_msg.payload = json.dumps(
         {
-            "worker_id": worker_id,
+            "id": worker_id,
             "capabilities": ["clip_embedding", "dino_embedding"],
             "idle_count": 1,
             "timestamp": 1234567890,
@@ -250,7 +250,7 @@ def test_subscribe_worker_updates(monitor, mock_mqtt_client):
     mock_msg.topic = f"{ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX}/{worker_id}"
     mock_msg.payload = json.dumps(
         {
-            "worker_id": worker_id,
+            "id": worker_id,
             "capabilities": ["test"],
             "idle_count": 1,
             "timestamp": 1234567890,

@@ -20,6 +20,7 @@ from cl_client.store_manager import StoreManager
 # ============================================================================
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_entity_triggers_jobs(
     store_manager: StoreManager,
@@ -85,6 +86,7 @@ async def test_entity_triggers_jobs(
 # ============================================================================
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_face_recognition_workflow_single_face(
     store_manager: StoreManager,
@@ -258,6 +260,7 @@ async def test_face_recognition_workflow_single_face(
         print(f"  Note: Face similarity search not available yet (this is the first test): {e}")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_face_recognition_workflow_multiple_faces(
     store_manager: StoreManager,

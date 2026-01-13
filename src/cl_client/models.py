@@ -5,7 +5,7 @@ Mirrors server schemas with strict typing (NO Any types).
 
 from collections.abc import Awaitable, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # JSON type hierarchy (from server schemas.py)
 type JSONPrimitive = str | int | float | bool | None
@@ -41,7 +41,9 @@ class WorkerCapabilitiesResponse(BaseModel):
 class WorkerCapability(BaseModel):
     """Individual worker capability information (from MQTT messages)."""
 
-    worker_id: str = Field(..., description="Worker unique ID")
+    model_config = ConfigDict(populate_by_name=True)
+
+    worker_id: str = Field(..., description="Worker unique ID", validation_alias="id")
     capabilities: list[str] = Field(..., description="List of task types worker supports")
     idle_count: int = Field(..., description="1 if idle, 0 if busy")
     timestamp: int = Field(..., description="Message timestamp (milliseconds)")

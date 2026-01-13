@@ -54,3 +54,5 @@ class HttpUtils:
             # Flatten params into form fields
             for key, value in params.items():
                 form_data[key] = str(value) if value is not None else ""
+
+        return form_data
