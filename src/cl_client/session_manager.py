@@ -90,6 +90,18 @@ class SessionManager:
         """Get server configuration (for use by client factories)."""
         return self._config
 
+    @property
+    def auth_client(self) -> AuthClient:
+        """Access to underlying AuthClient for advanced operations.
+
+        Provides direct access to AuthClient methods for user management
+        and other advanced operations not wrapped by SessionManager.
+
+        Returns:
+            The underlying AuthClient instance
+        """
+        return self._auth_client
+
     # ========================================================================
     # Authentication Lifecycle
     # ========================================================================

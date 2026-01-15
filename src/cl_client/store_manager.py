@@ -70,6 +70,18 @@ class StoreManager:
         """
         self._store_client: StoreClient = store_client
 
+    @property
+    def store_client(self) -> StoreClient:
+        """Access to underlying StoreClient for advanced operations.
+
+        Provides direct access to StoreClient methods that aren't wrapped
+        by StoreManager, such as database operations (faces, persons, images).
+
+        Returns:
+            The underlying StoreClient instance
+        """
+        return self._store_client
+
     @classmethod
     def guest(cls, base_url: str = "http://localhost:8001") -> "StoreManager":
         """Create StoreManager in guest mode (no authentication).
