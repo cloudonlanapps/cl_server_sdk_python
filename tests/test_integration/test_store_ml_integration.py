@@ -380,9 +380,7 @@ async def test_face_recognition_workflow_multiple_faces(
         print(f"  Note: No similar faces found for face {first_face_id} above threshold 0.7: {e}")
 
 
-@pytest.mark.skip(
-    reason="Focus on face detection workflow first - CLIP similarity search to be tested later"
-)
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_image_similarity_search(
     store_manager: StoreManager,
@@ -452,4 +450,41 @@ async def test_image_similarity_search(
             pytest.skip(
                 "Image similarity search endpoint not implemented or entity not indexed yet"
             )
-        raise
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_known_person_management(store_manager: StoreManager):
+    """Test management of known persons identified by face recognition."""
+    store_client = store_manager._store_client
+    
+    # 1. List all known persons
+    persons = await store_client.get_all_known_persons()
+    assert isinstance(persons, list)
+    if not persons:
+        pytest.skip("No known persons found in store. Run face recognition tests first.")
+        
+    person = persons[0]
+    person_id = person.id
+    
+    # 2. Get specific person
+    person_details = await store_client.get_known_person(person_id)
+    assert person_details.id == person_id
+    
+    # 3. Update person name
+    old_name = person_details.name
+    new_name = "Test Person Updated"
+    updated_person = await store_client.update_known_person_name(person_id, new_name)
+    assert updated_person.name == new_name
+    
+    # 4. Get person faces
+    faces = await store_client.get_known_person_faces(person_id)
+    assert len(faces) > 0
+    
+    # 5. Get face matches for one of the faces
+    face_id = faces[0].id
+    matches = await store_client.get_face_matches(face_id)
+    assert isinstance(matches, list)
+    
+    # Restore name
+    if old_name:
+        await store_client.update_known_person_name(person_id, old_name)
