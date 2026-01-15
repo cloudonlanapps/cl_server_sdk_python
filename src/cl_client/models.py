@@ -41,7 +41,7 @@ class WorkerCapabilitiesResponse(BaseModel):
 class WorkerCapability(BaseModel):
     """Individual worker capability information (from MQTT messages)."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True)  # pyright: ignore[reportUnannotatedClassAttribute]
 
     worker_id: str = Field(..., description="Worker unique ID")
     capabilities: list[str] = Field(..., description="List of task types worker supports")
