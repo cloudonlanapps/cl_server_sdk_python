@@ -230,6 +230,7 @@ async def test_base_plugin_submit_with_callbacks(mock_compute_client, temp_image
         job_id="test-job-123",
         on_progress=on_progress,
         on_complete=on_complete,
+        task_type="media_thumbnail",
     )
 
     # Verify response

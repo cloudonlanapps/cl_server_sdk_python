@@ -353,7 +353,7 @@ class MQTTJobMonitor:
             logger.warning(f"Subscription not found: {subscription_id}")
             return
 
-        job_id, _, _ = self._job_subscriptions[subscription_id]
+        job_id, *_ = self._job_subscriptions[subscription_id]
         del self._job_subscriptions[subscription_id]
 
         logger.debug(f"Removed callbacks for job {job_id} (sub_id: {subscription_id})")

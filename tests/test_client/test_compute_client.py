@@ -251,7 +251,10 @@ def test_subscribe_job_updates(client, mock_mqtt_monitor):
 
     assert sub_id == "sub-123"
     mock_mqtt_monitor.subscribe_job_updates.assert_called_once_with(
-        job_id="test-123", on_progress=on_progress, on_complete=on_complete
+        job_id="test-123",
+        on_progress=on_progress,
+        on_complete=on_complete,
+        task_type="unknown",
     )
 
 

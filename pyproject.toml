@@ -58,6 +58,7 @@ python_files = ["test_*.py"]
 asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "admin_only: marks tests as requiring admin permissions (deselect with '-m \"not admin_only\"')",
 ]
 addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fail-under=90"
 
