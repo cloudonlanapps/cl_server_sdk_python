@@ -170,7 +170,10 @@ class BasePluginClient:
             # Subscribe to MQTT callbacks if provided
             if on_progress or on_complete:
                 _ = self.client.mqtt_subscribe_job_updates(
-                    job_id=job.job_id, on_progress=on_progress, on_complete=on_complete
+                    job_id=job.job_id,
+                    on_progress=on_progress,
+                    on_complete=on_complete,
+                    task_type=self.task_type,
                 )
 
             # Wait for completion if requested (secondary workflow)

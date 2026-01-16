@@ -263,11 +263,13 @@ class ComputeClient(ClientProtocol):
     # ============================================================================
 
     @override
+    @override
     def mqtt_subscribe_job_updates(
         self,
         job_id: str,
         on_progress: OnJobResponseCallback = None,
         on_complete: OnJobResponseCallback = None,
+        task_type: str = "unknown",
     ) -> str:
         """Subscribe to job status updates via MQTT.
 
@@ -277,6 +279,7 @@ class ComputeClient(ClientProtocol):
             job_id: Job ID to monitor
             on_progress: Called on each job update (queued → in_progress → ...)
             on_complete: Called only when job completes (status: completed/failed)
+            task_type: Task type for the job (used to populate JobResponse)
 
         Returns:
             Unique subscription ID for unsubscribing later
@@ -285,13 +288,17 @@ class ComputeClient(ClientProtocol):
             sub_id = client.subscribe_job_updates(
                 job_id="abc-123",
                 on_progress=lambda job: print(f"Progress: {job.progress}%"),
-                on_complete=lambda job: print(f"Done: {job.status}")
+                on_complete=lambda job: print(f"Done: {job.status}"),
+                task_type="clip_embedding"
             )
             # Later...
             client.unsubscribe(sub_id)
         """
         return self._mqtt.subscribe_job_updates(
-            job_id=job_id, on_progress=on_progress, on_complete=on_complete
+            job_id=job_id,
+            on_progress=on_progress,
+            on_complete=on_complete,
+            task_type=task_type,
         )
 
     def unsubscribe(self, subscription_id: str) -> None:

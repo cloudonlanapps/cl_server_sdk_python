@@ -185,7 +185,7 @@ class MQTTJobMonitor:
             updateMsg = JobEventPayload.model_validate_json(msg.payload.decode())
 
             # Find matching subscriptions for this job
-            for _sub_id, (sub_job_id, on_progress, on_complete) in list(
+            for _sub_id, (sub_job_id, on_progress, on_complete, task_type) in list(
                 self._job_subscriptions.items()
             ):
                 if sub_job_id != updateMsg.job_id:
@@ -197,7 +197,7 @@ class MQTTJobMonitor:
 
                 job = JobResponse(
                     job_id=updateMsg.job_id,
-                    task_type="unknown",  # Not in event message
+                    task_type=task_type,  # Use task_type from subscription
                     status=updateMsg.event_type,
                     progress=(
                         int(updateMsg.progress)
@@ -295,6 +295,7 @@ class MQTTJobMonitor:
         job_id: str,
         on_progress: OnJobResponseCallback = None,
         on_complete: OnJobResponseCallback = None,
+        task_type: str = "unknown",
     ) -> str:
         """Subscribe to job status updates via MQTT.
 
@@ -306,6 +307,7 @@ class MQTTJobMonitor:
             job_id: Job ID to monitor
             on_progress: Called on each job update (queued → in_progress → ...)
             on_complete: Called only when job completes (status: completed/failed)
+            task_type: Task type for the job (used to populate JobResponse)
 
         Returns:
             Unique subscription ID for unsubscribing later
@@ -314,7 +316,8 @@ class MQTTJobMonitor:
             sub_id = monitor.subscribe_job_updates(
                 job_id="abc-123",
                 on_progress=lambda job: print(f"Progress: {job.progress}%"),
-                on_complete=lambda job: print(f"Done: {job.status}")
+                on_complete=lambda job: print(f"Done: {job.status}"),
+                task_type="clip_embedding"
             )
             # Later...
             monitor.unsubscribe(sub_id)
@@ -332,7 +335,7 @@ class MQTTJobMonitor:
                 pass
 
         # Store subscription (no need to subscribe to MQTT - already subscribed to events topic)
-        self._job_subscriptions[subscription_id] = (job_id, on_progress, on_complete)
+        self._job_subscriptions[subscription_id] = (job_id, on_progress, on_complete, task_type)
 
         logger.debug(
             f"Registered callbacks for job {job_id} (sub_id: {subscription_id})"
