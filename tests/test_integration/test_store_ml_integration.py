@@ -8,12 +8,54 @@ Priority order reflects dependencies:
 """
 
 import asyncio
+import random
+import uuid
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from cl_client import ComputeClient
 from cl_client.store_manager import StoreManager
+
+
+@pytest.fixture
+def unique_image(tmp_path_factory):
+    """Fixture to create a unique copy of a test image to bypass deduplication."""
+
+    def _make_unique(original_path: Path) -> Path:
+        temp_dir = tmp_path_factory.mktemp("unique_images")
+        unique_path = (
+            temp_dir / f"{original_path.stem}_{uuid.uuid4()}{original_path.suffix}"
+        )
+
+        with Image.open(original_path) as img:
+            img_unique = img.copy()
+            width, height = img_unique.size
+            pixels = img_unique.load()
+
+            # Pick a random pixel and modify it slightly to change the hash
+            x = random.randint(0, width - 1)
+            y = random.randint(0, height - 1)
+
+            # Get the pixel value
+            pixel_val = pixels[x, y]
+            if isinstance(pixel_val, int):
+                # Grayscale
+                pixels[x, y] = (pixel_val + 1) % 256
+            else:
+                # RGB or RGBA
+                current_pixel = list(pixel_val)
+                # Modify R, G, or B (index 0, 1, or 2)
+                channel = random.randint(0, min(len(current_pixel) - 1, 2))
+                current_pixel[channel] = (current_pixel[channel] + 1) % 256
+                pixels[x, y] = tuple(current_pixel)
+
+            img_unique.save(unique_path)
+
+        return unique_path
+
+    return _make_unique
 
 # ============================================================================
 # PRIORITY 2: JOB TRIGGERING
@@ -25,6 +67,7 @@ from cl_client.store_manager import StoreManager
 async def test_entity_triggers_jobs(
     store_manager: StoreManager,
     test_image_face_single: Path,
+    unique_image,
 ):
     """Test that creating an entity with an image triggers async ML jobs.
 
@@ -34,12 +77,13 @@ async def test_entity_triggers_jobs(
     3. Both face_detection and clip_embedding jobs are created
     4. Jobs have correct status fields (queued, in_progress, completed, failed)
     """
-    # Create entity with single face image
+    # Create entity with single face image (unique copy)
+    img_path = unique_image(test_image_face_single)
     result = await store_manager.create_entity(
         label="Single Face Test",
         description="Test image with one face",
         is_collection=False,
-        image_path=test_image_face_single,
+        image_path=img_path,
     )
 
     assert result.is_success, f"Failed to create entity: {result.error}"
@@ -92,6 +136,7 @@ async def test_face_recognition_workflow_single_face(
     store_manager: StoreManager,
     test_client: ComputeClient,
     test_image_face_single: Path,
+    unique_image,
 ):
     """Test complete face recognition workflow with single face image.
 
@@ -103,11 +148,12 @@ async def test_face_recognition_workflow_single_face(
     5. Download face crop
     6. Query known persons
     """
-    # Step 1: Create entity
+    # Step 1: Create entity (unique copy)
+    img_path = unique_image(test_image_face_single)
     result = await store_manager.create_entity(
         label="Single Face Workflow Test",
         is_collection=False,
-        image_path=test_image_face_single,
+        image_path=img_path,
     )
 
     assert result.is_success
@@ -265,6 +311,7 @@ async def test_face_recognition_workflow_multiple_faces(
     store_manager: StoreManager,
     test_client: ComputeClient,
     test_image_face_multiple: Path,
+    unique_image,
 ):
     """Test face recognition workflow with multiple faces in one image.
 
@@ -273,11 +320,12 @@ async def test_face_recognition_workflow_multiple_faces(
     2. Each face has valid metadata
     3. Face similarity search works
     """
-    # Step 1: Create entity
+    # Step 1: Create entity (unique copy)
+    img_path = unique_image(test_image_face_multiple)
     result = await store_manager.create_entity(
         label="Multiple Faces Workflow Test",
         is_collection=False,
-        image_path=test_image_face_multiple,
+        image_path=img_path,
     )
 
     assert result.is_success
@@ -386,6 +434,7 @@ async def test_image_similarity_search(
     store_manager: StoreManager,
     test_client: ComputeClient,
     test_image_face_single: Path,
+    unique_image,
 ):
     """Test CLIP-based image similarity search.
 
@@ -394,11 +443,12 @@ async def test_image_similarity_search(
     2. Image similarity search works
     3. Similar images are returned with scores
     """
-    # Create entity
+    # Create entity (unique copy)
+    img_path = unique_image(test_image_face_single)
     result = await store_manager.create_entity(
         label="Image Similarity Test",
         is_collection=False,
-        image_path=test_image_face_single,
+        image_path=img_path,
     )
 
     assert result.is_success
