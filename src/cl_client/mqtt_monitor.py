@@ -206,7 +206,7 @@ class MQTTJobMonitor:
                     ),
                     created_at=(
                         int(updateMsg.timestamp)
-                        if isinstance(updateMsg, (int, float))
+                        if isinstance(updateMsg.timestamp, (int, float))
                         else 0
                     ),
                     params={},
