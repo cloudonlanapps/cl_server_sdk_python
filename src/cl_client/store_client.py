@@ -202,3 +202,247 @@ class StoreClient:
         adapter = TypeAdapter(list[EntityVersion])
         return adapter.validate_python(response.json())
 
+    # Write operations
+
+    async def create_entity(
+        self,
+        is_collection: bool,
+        label: str | None = None,
+        image_path: Path | None = None,
+        description: str | None = None,
+        parent_id: int | None = None,
+    ) -> Entity:
+        """Create a new entity (collection or item).
+
+        Args:
+            is_collection: True if creating a collection
+            label: Entity label
+            image_path: Optional path to image file
+            description: Optional description
+            parent_id: Optional parent collection ID
+
+        Returns:
+            Created Entity
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data: dict[str, str] = {
+            "is_collection": str(is_collection).lower(),
+        }
+        if label:
+            data["label"] = label
+        if description:
+            data["description"] = description
+        if parent_id is not None:
+            data["parent_id"] = str(parent_id)
+
+        files = None
+        opened_files = None
+        try:
+            if image_path:
+                files = {"image": image_path}
+                opened_files = HttpUtils.open_multipart_files(files)
+
+            response = await self._client.post(
+                f"{self._base_url}/entities",
+                data=data,
+                files=opened_files,
+                headers=self._get_headers(),
+            )
+            _ = response.raise_for_status()
+            return Entity.model_validate(response.json())
+        finally:
+            if opened_files:
+                HttpUtils.close_multipart_files(opened_files)
+
+    async def update_entity(
+        self,
+        entity_id: int,
+        is_collection: bool,
+        label: str,
+        description: str | None = None,
+        parent_id: int | None = None,
+        image_path: Path | None = None,
+    ) -> Entity:
+        """Update an existing entity.
+
+        Args:
+            entity_id: ID of entity to update
+            is_collection: True if collection
+            label: New label
+            description: Optional new description
+            parent_id: Optional parent collection ID
+            image_path: Optional new image file
+
+        Returns:
+            Updated Entity
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data: dict[str, str] = {
+            "is_collection": str(is_collection).lower(),
+            "label": label,
+        }
+        if description:
+            data["description"] = description
+        if parent_id is not None:
+            data["parent_id"] = str(parent_id)
+
+        files = None
+        opened_files = None
+        try:
+            if image_path:
+                files = {"image": image_path}
+                opened_files = HttpUtils.open_multipart_files(files)
+
+            response = await self._client.put(
+                f"{self._base_url}/entities/{entity_id}",
+                data=data,
+                files=opened_files,
+                headers=self._get_headers(),
+            )
+            _ = response.raise_for_status()
+            return Entity.model_validate(response.json())
+        finally:
+            if opened_files:
+                HttpUtils.close_multipart_files(opened_files)
+
+    async def patch_entity(
+        self,
+        entity_id: int,
+        label: str | None = None,
+        description: str | None = None,
+        is_deleted: bool | None = None,
+        is_collection: bool | None = None,
+        parent_id: int | None = None,
+    ) -> Entity:
+        """Patch an entity (partial update).
+
+        Args:
+            entity_id: Entity ID
+            label: Optional new label
+            description: Optional new description
+            is_deleted: Optional soft delete status
+            is_collection: Optional collection status
+            parent_id: Optional parent collection ID
+
+        Returns:
+            Updated Entity
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data: dict[str, str] = {}
+        if label is not None:
+            data["label"] = label
+        if description is not None:
+            data["description"] = description
+        if is_deleted is not None:
+            data["is_deleted"] = str(is_deleted).lower()
+        if is_collection is not None:
+            data["is_collection"] = str(is_collection).lower()
+        if parent_id is not None:
+            data["parent_id"] = str(parent_id)
+
+        response = await self._client.patch(
+            f"{self._base_url}/entities/{entity_id}",
+            data=data,
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return Entity.model_validate(response.json())
+
+    async def delete_entity(self, entity_id: int) -> None:
+        """Hard delete an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.delete(
+            f"{self._base_url}/entities/{entity_id}",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+
+    async def delete_all_entities(self) -> None:
+        """Delete all entities (admin only).
+
+        This performs a bulk delete of all entities in the store.
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (403 if not admin)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.delete(
+            f"{self._base_url}/entities",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+
+    # Admin operations
+
+    async def get_config(self) -> StoreConfig:
+        """Get store configuration (admin only).
+
+        Returns:
+            StoreConfig
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/admin/config",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return StoreConfig.model_validate(response.json())
+
+    async def update_guest_mode(self, guest_mode: bool) -> StoreConfig:
+        """Update guest mode setting (admin only).
+
+        Args:
+            guest_mode: New guest mode status
+
+        Returns:
+            Updated StoreConfig
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        data = {"guest_mode": str(guest_mode).lower()}
+
+        response = await self._client.put(
+            f"{self._base_url}/admin/config/guest-mode",
+            data=data,
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return await self.get_config()
+
+
+
