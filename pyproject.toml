@@ -59,6 +59,7 @@ asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "admin_only: marks tests as requiring admin permissions (deselect with '-m \"not admin_only\"')",
+    "intelligence: marks tests that use intelligence endpoints (deselect with '-m \"not intelligence\"')",
 ]
 addopts = "--cov=cl_client --cov-report=html --cov-report=term-missing --cov-fail-under=90"
 

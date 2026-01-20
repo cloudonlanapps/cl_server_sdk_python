@@ -1,7 +1,7 @@
-import pytest
-import httpx
-from pathlib import Path
 from cl_client.store_client import StoreClient
+import pytest
+
+pytestmark = [pytest.mark.intelligence]
 
 @pytest.mark.asyncio
 async def test_store_client_uninitialized_errors():

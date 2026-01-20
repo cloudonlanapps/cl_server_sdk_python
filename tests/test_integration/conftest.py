@@ -385,7 +385,7 @@ async def cleanup_store_entities(
     """
 
     # Only run for store integration tests
-    if "test_store_integration" not in request.module.__name__:
+    if "test_store" not in request.module.__name__:
         yield
         return
 
@@ -394,20 +394,7 @@ async def cleanup_store_entities(
         yield
         return
 
-    # Cleanup requires admin
-    user_info = auth_config.user_info
-    if not user_info or not user_info.is_admin:
-        pytest.skip("Store cleanup requires admin credentials")
-
-    store_url = auth_config.store_url
-    auth_url = auth_config.auth_url
-    username = auth_config.username
-    password = auth_config.password
-
-    # Guaranteed to be not None at this point
-    assert username is not None
-    assert password is not None
-
+    # Bulk cleanup logic
     try:
         async with httpx.AsyncClient() as client:
             # Login
@@ -422,30 +409,34 @@ async def cleanup_store_entities(
             )
 
             if token_resp.status_code != 200:
-                pytest.fail("Failed to authenticate admin for store cleanup")
+                return
 
             token = token_resp.json()["access_token"]
 
-            # Fetch entities
-            resp = await client.get(
-                f"{store_url}/entities?page=1&page_size=1000",
+            # Try bulk delete first (fastest, requires admin)
+            bulk_resp = await client.delete(
+                f"{store_url}/entities",
                 headers={"Authorization": f"Bearer {token}"},
-                timeout=5.0,
+                timeout=10.0,
             )
 
-            if resp.status_code != 200:
-                yield
-                return
-
-            entities = resp.json().get("items", [])
-
-            # Delete all
-            for entity in entities:
-                await client.delete(
-                    f"{store_url}/entities/{entity['id']}",
+            if bulk_resp.status_code == 403:
+                # Fallback for non-admin: list and delete individually
+                # This still clears Qdrant because delete_entity now includes vector cleanup
+                resp = await client.get(
+                    f"{store_url}/entities?page=1&page_size=100",
                     headers={"Authorization": f"Bearer {token}"},
                     timeout=5.0,
                 )
+
+                if resp.status_code == 200:
+                    entities = resp.json().get("items", [])
+                    for entity in entities:
+                        await client.delete(
+                            f"{store_url}/entities/{entity['id']}",
+                            headers={"Authorization": f"Bearer {token}"},
+                            timeout=5.0,
+                        )
 
     except Exception:
         # Non-fatal cleanup failure

@@ -18,6 +18,8 @@ from PIL import Image
 from cl_client import ComputeClient
 from cl_client.store_manager import StoreManager
 
+pytestmark = [pytest.mark.intelligence, pytest.mark.integration]
+
 
 @pytest.fixture
 def unique_image(tmp_path_factory):
