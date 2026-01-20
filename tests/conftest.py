@@ -5,7 +5,17 @@ This conftest provides models and helpers that are imported directly by test fil
 Integration test fixtures are in tests/test_integration/conftest.py
 """
 
+import os
+from pathlib import Path
+
 from pydantic import BaseModel
+
+# ============================================================================
+# TEST ARTIFACT DIRECTORY
+# ============================================================================
+
+TEST_ARTIFACT_DIR = Path(os.getenv("TEST_ARTIFACT_DIR", "/tmp/cl_server_test_artifacts")) / "pysdk"
+TEST_ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
 # PYDANTIC MODELS
