@@ -2,6 +2,14 @@
 
 Python client library for interacting with the CL Server compute service. Provides an async API for submitting jobs, monitoring progress via MQTT, and downloading results.
 
+**Package Manager:** uv
+**Authentication Method:** ES256 JWT (optional)
+**Type Safety:** Strict basedpyright checking with no `Any` types
+
+> **For Developers:** See [INTERNALS.md](INTERNALS.md) for package structure, development workflow, and contribution guidelines.
+>
+> **For Testing:** See [tests/README.md](tests/README.md) for comprehensive testing guide, test organization, and coverage requirements.
+
 ## Features
 
 - 🚀 **Async/Await Support**: Built on httpx for efficient async operations
@@ -15,6 +23,8 @@ Python client library for interacting with the CL Server compute service. Provid
 
 ## Installation
 
+**Individual Package Installation:**
+
 ```bash
 # Install from PyPI (when published)
 pip install cl-client
@@ -23,9 +33,13 @@ pip install cl-client
 uv pip install cl-client
 
 # Or install locally for development
-cd /path/to/cl_server/services/compute/client/python
+cd sdks/pysdk
 uv sync
 ```
+
+**Workspace Installation (All Packages):**
+
+See root [README.md](../../README.md) for installing all packages using `./install.sh`.
 
 ## Quick Start
 
@@ -503,10 +517,39 @@ uv run basedpyright
 - **[INTERNALS.md](./INTERNALS.md)** - Developer documentation, architecture, contributing guide
 - **[tests/README.md](./tests/README.md)** - Testing guide with fixtures and patterns
 - **[tests/media/MEDIA_SETUP.md](./tests/media/MEDIA_SETUP.md)** - Test media setup instructions
+- **[Architecture Overview](../../docs/ARCHITECTURE.md)** - System-wide architecture and inter-service communication
 
-## CLI Tool
+## CLI Tools
 
-A separate command-line interface tool is available in the `example/` directory. See [example/README.md](./example/README.md) for CLI documentation.
+The Python SDK provides two CLI tools for interacting with CL Server services.
+
+### Command 1: cl_client (Job Management CLI)
+
+Interactive command-line interface for submitting and managing compute jobs.
+
+```bash
+# Run the CLI tool
+uv run cl_client
+
+# Or if installed globally
+cl_client
+```
+
+See [example/README.md](./example/README.md) for detailed CLI usage documentation.
+
+### Command 2: cl-admin (Admin Utility)
+
+Administrative utility for user and configuration management.
+
+```bash
+# Run admin utility
+uv run cl-admin
+
+# Or if installed globally
+cl-admin
+```
+
+**Note:** Admin functionality requires appropriate permissions on the CL Server instance.
 
 ## License
 

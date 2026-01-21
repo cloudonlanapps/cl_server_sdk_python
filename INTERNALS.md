@@ -24,6 +24,8 @@ uv run ruff format src/
 
 ## Architecture
 
+**Note:** For system-wide architecture and inter-service communication, see [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) in the repository root. This section covers SDK-specific architecture only.
+
 ### Configuration-First Design
 
 All endpoints, hosts, ports are centralized in `config.py`:
