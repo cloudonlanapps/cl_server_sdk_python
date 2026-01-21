@@ -26,7 +26,7 @@ class TestAuthClientInit:
         client = AuthClient()
 
         assert client.base_url == "http://localhost:8000"
-        assert client.timeout == 30.0
+        assert client.timeout == 60.0
         assert client._session is not None
         assert isinstance(client._session, httpx.AsyncClient)
 
