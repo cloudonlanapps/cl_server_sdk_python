@@ -26,7 +26,7 @@ class AuthClient:
 
     Example:
         # Direct auth client usage
-        async with AuthClient(base_url="http://localhost:8000") as auth:
+        async with AuthClient(base_url="http://localhost:8000", timeout=60.0) as auth:
             # Login
             token = await auth.login(username="user", password="pass")
             print(token.access_token)
@@ -40,7 +40,7 @@ class AuthClient:
         self,
         base_url: str | None = None,
         server_config: ServerConfig | None = None,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
     ) -> None:
         """Initialize auth client.
 

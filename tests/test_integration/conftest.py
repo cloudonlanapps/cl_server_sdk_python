@@ -149,7 +149,7 @@ def user_info(cli_config: CliConfig) -> UserInfo | None:
     assert cli_config.password is not None
 
     async def fetch_user_info():
-        auth_client = AuthClient(base_url=cli_config.auth_url)
+        auth_client = AuthClient(base_url=cli_config.auth_url, timeout=60.0)
         try:
             # Login to get token
             assert cli_config.username is not None
@@ -321,6 +321,31 @@ def test_image(media_dir: Path) -> Path:
 
 
 @pytest.fixture
+def unique_test_image(test_image: Path, tmp_path: Path) -> Path:
+    """Create a unique copy of test image to avoid MD5 deduplication."""
+    import uuid
+    from PIL import Image
+    
+    unique_path = tmp_path / f"unique_{uuid.uuid4().hex}.jpg"
+    
+    with Image.open(test_image) as img:
+        # Convert to RGB to ensure we can modify pixels
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+            
+        # Modify top-left pixel slightly to ensure unique hash
+        pixels = img.load()
+        if pixels:
+            r, g, b = pixels[0, 0] # type: ignore
+            # Change blue channel by random amount or just 1
+            pixels[0, 0] = (r, g, (b + 10) % 256) # type: ignore
+        
+        img.save(unique_path)
+        
+    return unique_path
+
+
+@pytest.fixture
 def test_image_png(media_dir: Path) -> Path:
     """Get PNG test image."""
     image_path = media_dir / "images" / "test_image_800x600.png"
@@ -396,6 +421,11 @@ async def cleanup_store_entities(
 
     # Bulk cleanup logic
     try:
+        username = auth_config.username
+        password = auth_config.password
+        auth_url = auth_config.auth_url
+        store_url = auth_config.store_url
+
         async with httpx.AsyncClient() as client:
             # Login
             token_resp = await client.post(

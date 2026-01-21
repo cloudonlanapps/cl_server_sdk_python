@@ -60,6 +60,59 @@ async def test_list_entities_with_search(store_manager, auth_config: AuthConfig)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_list_entities_exclude_deleted(
+    store_manager,
+    unique_test_image: Path,
+    auth_config: AuthConfig,
+):
+    """Test listing entities with exclude_deleted flag."""
+    if should_succeed(auth_config, operation_type="store_write"):
+        # Create an entity
+        create_result = await store_manager.create_entity(
+            label="Entity to Soft Delete",
+            is_collection=False,
+            image_path=unique_test_image,
+        )
+        assert create_result.is_success
+        entity_id = create_result.data.id
+
+        # Soft delete it
+        patch_result = await store_manager.patch_entity(
+            entity_id=entity_id,
+            is_deleted=True,
+        )
+        assert patch_result.is_success
+
+        if should_succeed(auth_config, operation_type="store_read"):
+            # 1. List without exclude_deleted (default False) -> Should include deleted
+            # Note: Server default might be different, but we check if we can control it.
+            # Usually default list includes everything unless filtered.
+            # But let's check explicitly with exclude_deleted=False
+            list_all = await store_manager.list_entities(
+                exclude_deleted=False, 
+                search_query="Entity to Soft Delete"
+            )
+            assert list_all.is_success
+            # Should find it
+            found_all = any(i.id == entity_id for i in list_all.data.items)
+            assert found_all, "Should find soft-deleted entity when exclude_deleted=False"
+
+            # 2. List with exclude_deleted=True -> Should NOT include deleted
+            list_excluded = await store_manager.list_entities(
+                exclude_deleted=True,
+                search_query="Entity to Soft Delete"
+            )
+            assert list_excluded.is_success
+            found_excluded = any(i.id == entity_id for i in list_excluded.data.items)
+            assert not found_excluded, "Should NOT find soft-deleted entity when exclude_deleted=True"
+
+        # Cleanup (hard delete)
+        delete_result = await store_manager.delete_entity(entity_id)
+        assert delete_result.is_success
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_create_entity_collection(store_manager, auth_config: AuthConfig):
     """Test creating a collection (folder) entity."""
     if should_succeed(auth_config, operation_type="store_write"):
@@ -94,7 +147,7 @@ async def test_create_entity_collection(store_manager, auth_config: AuthConfig):
 @pytest.mark.asyncio
 async def test_create_entity_with_file(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test creating entity with file upload."""
@@ -104,7 +157,7 @@ async def test_create_entity_with_file(
             label="Test Image",
             description="Test upload",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert result.is_success, f"Expected success but got error: {result.error}"
         assert result.data is not None
@@ -123,7 +176,7 @@ async def test_create_entity_with_file(
         result = await store_manager.create_entity(
             label="Test Image",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert result.is_error
 
@@ -132,7 +185,7 @@ async def test_create_entity_with_file(
 @pytest.mark.asyncio
 async def test_read_entity(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test reading entity by ID."""
@@ -142,7 +195,7 @@ async def test_read_entity(
         create_result = await store_manager.create_entity(
             label="Entity to Read",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id
@@ -152,7 +205,11 @@ async def test_read_entity(
             read_result = await store_manager.read_entity(entity_id=entity_id)
             assert read_result.is_success
             assert read_result.data.id == entity_id
+            assert read_result.data.id == entity_id
             assert read_result.data.label == "Entity to Read"
+            # Verify new fields exist (even if None)
+            assert hasattr(read_result.data, "is_indirectly_deleted")
+            assert hasattr(read_result.data, "intelligence_status")
 
         # Cleanup
         delete_result = await store_manager.delete_entity(entity_id)
@@ -163,7 +220,7 @@ async def test_read_entity(
 @pytest.mark.asyncio
 async def test_update_entity(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test full update (PUT) of an entity."""
@@ -172,8 +229,9 @@ async def test_update_entity(
         create_result = await store_manager.create_entity(
             label="Original Label",
             description="Original description",
+
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id
@@ -198,7 +256,7 @@ async def test_update_entity(
 @pytest.mark.asyncio
 async def test_patch_entity(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test partial update (PATCH) of an entity."""
@@ -208,7 +266,7 @@ async def test_patch_entity(
             label="Original Label",
             description="Original description",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id
@@ -232,7 +290,7 @@ async def test_patch_entity(
 @pytest.mark.asyncio
 async def test_patch_entity_soft_delete(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test soft delete via PATCH."""
@@ -241,7 +299,7 @@ async def test_patch_entity_soft_delete(
         create_result = await store_manager.create_entity(
             label="Entity to Soft Delete",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id
@@ -271,7 +329,7 @@ async def test_patch_entity_soft_delete(
 @pytest.mark.asyncio
 async def test_delete_entity(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test hard delete of an entity."""
@@ -280,7 +338,7 @@ async def test_delete_entity(
         create_result = await store_manager.create_entity(
             label="Entity to Delete",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id
@@ -300,7 +358,7 @@ async def test_delete_entity(
 @pytest.mark.asyncio
 async def test_get_versions(
     store_manager,
-    test_image: Path,
+    unique_test_image: Path,
     auth_config: AuthConfig,
 ):
     """Test retrieving version history for an entity."""
@@ -310,7 +368,7 @@ async def test_get_versions(
             label="Version Test Entity",
             description="Original",
             is_collection=False,
-            image_path=test_image,
+            image_path=unique_test_image,
         )
         assert create_result.is_success
         entity_id = create_result.data.id

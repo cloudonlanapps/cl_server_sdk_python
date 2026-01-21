@@ -161,14 +161,18 @@ class StoreManager:
         self,
         page: int = 1,
         page_size: int = 20,
+
         search_query: str | None = None,
+        exclude_deleted: bool = False,
     ) -> StoreOperationResult[EntityListResponse]:
         """List entities with pagination and optional search.
 
         Args:
             page: Page number (1-indexed)
             page_size: Items per page (max 100)
+            page_size: Items per page (max 100)
             search_query: Optional search query for label/description
+            exclude_deleted: Whether to exclude soft-deleted entities
 
         Returns:
             StoreOperationResult containing EntityListResponse or error
@@ -178,6 +182,7 @@ class StoreManager:
                 page=page,
                 page_size=page_size,
                 search_query=search_query,
+                exclude_deleted=exclude_deleted,
             )
             return StoreOperationResult[EntityListResponse](
                 success="Entities retrieved successfully",
@@ -367,6 +372,8 @@ class StoreManager:
     ) -> StoreOperationResult[None]:
         """Hard delete an entity (permanent removal).
 
+        Automatically soft-deletes the entity first as required by the server.
+
         Requires media_store_write permission (always requires auth).
 
         Args:
@@ -376,6 +383,18 @@ class StoreManager:
             StoreOperationResult with success/error status
         """
         try:
+            # Server requires entity to be soft-deleted before hard deletion
+            # Try to soft-delete first
+            patch_result = await self.patch_entity(entity_id=entity_id, is_deleted=True)
+            
+            # If soft-delete failed, check why
+            # If it failed because it's not found, proceed to delete (will return 404)
+            # If it failed for other reasons, return error
+            if patch_result.is_error:
+                error_msg = str(patch_result.error)
+                if "Not Found" not in error_msg and "404" not in error_msg:
+                     return StoreOperationResult[None](error=error_msg)
+
             await self._store_client.delete_entity(entity_id=entity_id)
             return StoreOperationResult[None](
                 success="Entity deleted successfully",
@@ -426,3 +445,22 @@ class StoreManager:
             return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
+
+    async def get_m_insight_status(self) -> StoreOperationResult[dict[str, object]]:
+        """Get MInsight process status (admin only).
+        
+        Requires admin role.
+        
+        Returns:
+            StoreOperationResult with status dictionary
+        """
+        try:
+            status = await self._store_client.get_m_insight_status()
+            return StoreOperationResult[dict[str, object]](
+                success="MInsight status retrieved successfully",
+                data=status,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[dict[str, object]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[dict[str, object]](error=f"Unexpected error: {str(e)}")

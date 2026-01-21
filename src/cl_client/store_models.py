@@ -55,6 +55,14 @@ class Entity(BaseModel):
     extension: str | None = Field(default=None, description="File extension (e.g., jpg, mp4)")
     md5: str | None = Field(default=None, description="MD5 checksum (unique constraint)")
     file_path: str | None = Field(default=None, description="Relative file path in storage")
+    is_indirectly_deleted: bool | None = Field(
+        default=None,
+        description="True if any ancestor in the parent chain is soft-deleted",
+    )
+    intelligence_status: str | None = Field(
+        default=None,
+        description="Status of image intelligence processing (queued, processing, completed, failed)",
+    )
 
     @property
     def added_date_datetime(self) -> datetime | None:

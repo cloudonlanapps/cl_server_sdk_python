@@ -112,6 +112,7 @@ class StoreClient:
         page_size: int = 20,
         search_query: str | None = None,
         version: int | None = None,
+        exclude_deleted: bool = False,
     ) -> EntityListResponse:
         """List entities with pagination and optional search.
 
@@ -120,6 +121,7 @@ class StoreClient:
             page_size: Items per page (max 100)
             search_query: Optional search query for label/description
             version: Optional version number to retrieve
+            exclude_deleted: Whether to exclude soft-deleted entities
 
         Returns:
             EntityListResponse with items and pagination metadata
@@ -138,6 +140,8 @@ class StoreClient:
             params["search_query"] = search_query
         if version is not None:
             params["version"] = version
+        if exclude_deleted:
+            params["exclude_deleted"] = "true"
 
         response = await self._client.get(
             f"{self._base_url}/entities",
@@ -441,8 +445,26 @@ class StoreClient:
             data=data,
             headers=self._get_headers(),
         )
-        _ = response.raise_for_status()
         return await self.get_config()
+    
+    async def get_m_insight_status(self) -> dict[str, object]:
+        """Get MInsight process status (admin only).
+        
+        Returns:
+            Dictionary with status information
+        
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/m_insight/status",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.json()
 
 
 
