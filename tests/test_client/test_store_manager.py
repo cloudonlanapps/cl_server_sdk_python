@@ -118,6 +118,7 @@ class TestStoreManagerReadOperations:
             page=1,
             page_size=20,
             search_query=None,
+            exclude_deleted=False,
         )
 
     @pytest.mark.asyncio
@@ -147,6 +148,7 @@ class TestStoreManagerReadOperations:
             page=1,
             page_size=10,
             search_query="test query",
+            exclude_deleted=False,
         )
 
     @pytest.mark.asyncio
@@ -316,6 +318,8 @@ class TestStoreManagerWriteOperations:
     @pytest.mark.asyncio
     async def test_delete_entity_success(self, store_manager, mock_store_client):
         """Test hard delete of entity."""
+        # Mock patch_entity (called internally) to return a valid Entity model
+        mock_store_client.patch_entity.return_value = Entity(id=123, is_deleted=True)
         mock_store_client.delete_entity.return_value = None
 
         result = await store_manager.delete_entity(entity_id=123)
@@ -449,6 +453,10 @@ class TestStoreManagerErrorHandling:
     @pytest.mark.asyncio
     async def test_generic_http_error(self, store_manager, mock_store_client):
         """Test handling other HTTP errors."""
+        # Mock patch_entity (called internally by delete_entity) to return a valid Entity model
+        # so it doesn't fail validation before we reach the delete_entity call
+        mock_store_client.patch_entity.return_value = Entity(id=123, is_deleted=True)
+
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.json.return_value = {"detail": "Internal server error"}
