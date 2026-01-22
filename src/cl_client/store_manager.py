@@ -22,6 +22,11 @@ from .store_models import (
     StoreConfig,
     StoreOperationResult,
 )
+from .intelligence_models import (
+    EntityJobResponse,
+    FaceResponse,
+    KnownPersonResponse,
+)
 
 
 class StoreManager:
@@ -464,3 +469,122 @@ class StoreManager:
             return cast(StoreOperationResult[dict[str, object]], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[dict[str, object]](error=f"Unexpected error: {str(e)}")
+
+    # Intelligence operations
+
+    async def get_entity_faces(self, entity_id: int) -> StoreOperationResult[list[FaceResponse]]:
+        """Get all faces detected in an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with list of FaceResponse
+        """
+        try:
+            faces = await self._store_client.get_entity_faces(entity_id)
+            return StoreOperationResult[list[FaceResponse]](
+                success="Faces retrieved successfully",
+                data=faces,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[list[FaceResponse]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[list[FaceResponse]](error=f"Unexpected error: {str(e)}")
+
+    async def get_entity_jobs(self, entity_id: int) -> StoreOperationResult[list[EntityJobResponse]]:
+        """Get all compute jobs for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with list of EntityJobResponse
+        """
+        try:
+            jobs = await self._store_client.get_entity_jobs(entity_id)
+            return StoreOperationResult[list[EntityJobResponse]](
+                success="Jobs retrieved successfully",
+                data=jobs,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[list[EntityJobResponse]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[list[EntityJobResponse]](error=f"Unexpected error: {str(e)}")
+
+    async def download_entity_embedding(self, entity_id: int) -> StoreOperationResult[bytes]:
+        """Download entity CLIP embedding as .npy bytes.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with raw bytes of .npy file
+        """
+        try:
+            data = await self._store_client.download_entity_embedding(entity_id)
+            return StoreOperationResult[bytes](
+                success="Embedding downloaded successfully",
+                data=data,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bytes], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bytes](error=f"Unexpected error: {str(e)}")
+
+    async def download_face_embedding(self, face_id: int) -> StoreOperationResult[bytes]:
+        """Download face embedding as .npy bytes.
+
+        Args:
+            face_id: Face ID
+
+        Returns:
+            StoreOperationResult with raw bytes of .npy file
+        """
+        try:
+            data = await self._store_client.download_face_embedding(face_id)
+            return StoreOperationResult[bytes](
+                success="Face embedding downloaded successfully",
+                data=data,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bytes], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bytes](error=f"Unexpected error: {str(e)}")
+
+    async def get_known_persons(self) -> StoreOperationResult[list[KnownPersonResponse]]:
+        """Get all known persons.
+
+        Returns:
+            StoreOperationResult with list of KnownPersonResponse
+        """
+        try:
+            persons = await self._store_client.get_known_persons()
+            return StoreOperationResult[list[KnownPersonResponse]](
+                success="Known persons retrieved successfully",
+                data=persons,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[list[KnownPersonResponse]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[list[KnownPersonResponse]](error=f"Unexpected error: {str(e)}")
+
+    async def get_person_faces(self, person_id: int) -> StoreOperationResult[list[FaceResponse]]:
+        """Get all faces associated with a known person.
+
+        Args:
+            person_id: Known person ID
+
+        Returns:
+            StoreOperationResult with list of FaceResponse
+        """
+        try:
+            faces = await self._store_client.get_person_faces(person_id)
+            return StoreOperationResult[list[FaceResponse]](
+                success="Person faces retrieved successfully",
+                data=faces,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[list[FaceResponse]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[list[FaceResponse]](error=f"Unexpected error: {str(e)}")

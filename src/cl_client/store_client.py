@@ -18,6 +18,11 @@ from cl_client.store_models import (
     RootResponse,
     StoreConfig,
 )
+from cl_client.intelligence_models import (
+    EntityJobResponse,
+    FaceResponse,
+    KnownPersonResponse,
+)
 
 
 class StoreClient:
@@ -465,6 +470,141 @@ class StoreClient:
         )
         _ = response.raise_for_status()
         return response.json()
+
+    # Intelligence operations
+
+    async def get_entity_faces(self, entity_id: int) -> list[FaceResponse]:
+        """Get all faces detected in an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of FaceResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}/faces",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceResponse])
+        return adapter.validate_python(response.json())
+
+    async def get_entity_jobs(self, entity_id: int) -> list[EntityJobResponse]:
+        """Get all compute jobs for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of EntityJobResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}/jobs",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[EntityJobResponse])
+        return adapter.validate_python(response.json())
+
+    async def download_entity_embedding(self, entity_id: int) -> bytes:
+        """Download entity CLIP embedding as .npy bytes.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Raw bytes of .npy file
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}/embedding",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.content
+
+    async def download_face_embedding(self, face_id: int) -> bytes:
+        """Download face embedding as .npy bytes.
+
+        Args:
+            face_id: Face ID
+
+        Returns:
+            Raw bytes of .npy file
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/faces/{face_id}/embedding",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.content
+
+    async def get_known_persons(self) -> list[KnownPersonResponse]:
+        """Get all known persons.
+
+        Returns:
+            List of KnownPersonResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/known-persons",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[KnownPersonResponse])
+        return adapter.validate_python(response.json())
+
+    async def get_person_faces(self, person_id: int) -> list[FaceResponse]:
+        """Get all faces associated with a known person.
+
+        Args:
+            person_id: Known person ID
+
+        Returns:
+            List of FaceResponse models
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/known-persons/{person_id}/faces",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceResponse])
+        return adapter.validate_python(response.json())
 
 
 
