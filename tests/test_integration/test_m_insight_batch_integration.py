@@ -7,23 +7,13 @@ import uuid
 from pathlib import Path as PathlibPath
 
 import pytest
-from PIL import Image
+from .test_utils import create_unique_copy
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import AuthConfig, should_succeed
 
 
-def create_unique_image(base_image: PathlibPath, output_path: PathlibPath, index: int):
-    """Create a unique copy of an image by modifying a pixel."""
-    with Image.open(base_image) as img:
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        pixels = img.load()
-        if pixels:
-            r, g, b = pixels[0, 0] # type: ignore
-            # Modify pixel based on index to ensure uniqueness
-            pixels[0, 0] = (r, g, (b + index + 1) % 256) # type: ignore
-        img.save(output_path)
+
 
 
 @pytest.mark.integration
@@ -46,10 +36,9 @@ async def test_m_insight_batch_upload_and_queue(
     status_result = await store_manager.get_m_insight_status()
     assert status_result.is_success, f"Failed to get MInsight status: {status_result.error}"
     
-    # Check for any online worker
-    statuses = status_result.data or {}
-    online_workers = [p for p, s in statuses.items() if s.get("status") == "running"]
-    assert online_workers, "No MInsight workers reported 'running' status. Ensure MInsight process is started with MQTT enabled."
+    # Check if worker is running
+    status = status_result.data
+    assert status and status.get("status") == "running", f"MInsight worker not running. Status: {status}"
     
     # 2. Upload 30 unique images in parallel
     NUM_IMAGES = 30
@@ -60,7 +49,7 @@ async def test_m_insight_batch_upload_and_queue(
     
     for i in range(NUM_IMAGES):
         unique_path = tmp_path / f"batch_{i}_{uuid.uuid4().hex[:6]}.jpg"
-        create_unique_image(test_image, unique_path, i)
+        create_unique_copy(test_image, unique_path, offset=i)
         
         # We wrap in a coroutine to capture the resulting ID
         async def upload_task(path, idx):

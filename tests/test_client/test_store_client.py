@@ -8,6 +8,14 @@ import pytest
 from cl_client.auth import NoAuthProvider
 from cl_client.store_client import StoreClient
 from cl_client.store_models import Entity, EntityListResponse, StoreConfig
+from cl_client.intelligence_models import (
+    FaceResponse,
+    SimilarImagesResponse,
+    SimilarFacesResponse,
+    FaceMatchResult,
+    KnownPersonResponse,
+)
+from cl_client.types import UNSET
 
 
 @pytest.fixture
@@ -278,6 +286,33 @@ class TestStoreClientWriteOperations:
         assert call_args[1]["data"]["label"] == "Patched Label"
 
     @pytest.mark.asyncio
+    async def test_patch_entity_with_unset(self, store_client, mock_httpx_client):
+        """Test patch entity with UNSET sentinel."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": 123,
+            "label": "Original Label",
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.patch.return_value = mock_response
+
+        # Test with UNSET (default)
+        await store_client.patch_entity(entity_id=123)
+        call_args = mock_httpx_client.patch.call_args
+        # Should be empty data since all are UNSET
+        assert call_args[1]["data"] == {}
+
+        # Test explicitly UNSET vs passed None
+        # Passing None for optional string field -> empty string (to unset on server if applicable)
+        await store_client.patch_entity(entity_id=123, label=None)
+        call_args = mock_httpx_client.patch.call_args
+        assert call_args[1]["data"]["label"] == ""
+
+        await store_client.patch_entity(entity_id=123, parent_id=None)
+        call_args = mock_httpx_client.patch.call_args
+        assert call_args[1]["data"]["parent_id"] == ""
+
+    @pytest.mark.asyncio
     async def test_patch_entity_soft_delete(self, store_client, mock_httpx_client):
         """Test soft delete via patch."""
         mock_response = Mock()
@@ -422,3 +457,127 @@ class TestStoreClientAuthIntegration:
         # Verify headers were passed
         call_args = mock_httpx_client.get.call_args
         assert "headers" in call_args[1]
+
+
+class TestStoreClientIntelligenceOperations:
+    """Tests for intelligence operations."""
+
+    @pytest.mark.asyncio
+    async def test_download_entity_clip_embedding(self, store_client, mock_httpx_client):
+        """Test downloading CLIP embedding."""
+        mock_response = Mock()
+        mock_response.content = b"fake-npy-data"
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.download_entity_clip_embedding(entity_id=123)
+
+        assert result == b"fake-npy-data"
+        mock_httpx_client.get.assert_called_once()
+        assert "intelligence/entities/123/clip_embedding" in mock_httpx_client.get.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_download_entity_dino_embedding(self, store_client, mock_httpx_client):
+        """Test downloading DINO embedding."""
+        mock_response = Mock()
+        mock_response.content = b"fake-dino-data"
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.download_entity_dino_embedding(entity_id=123)
+
+        assert result == b"fake-dino-data"
+        mock_httpx_client.get.assert_called_once()
+        assert "intelligence/entities/123/dino_embedding" in mock_httpx_client.get.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_search_similar_images(self, store_client, mock_httpx_client):
+        """Test searching similar images."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "results": [
+                {"id": 1, "score": 0.95},
+                {"id": 2, "score": 0.88},
+            ],
+            "query_image_id": 123
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.search_similar_images(entity_id=123, limit=10)
+
+        assert isinstance(result, SimilarImagesResponse)
+        assert len(result.results) == 2
+        assert result.query_image_id == 123
+        
+        call_args = mock_httpx_client.get.call_args
+        assert "intelligence/entities/123/similar" in call_args[0][0]
+        assert call_args[1]["params"]["limit"] == 10
+
+    @pytest.mark.asyncio
+    async def test_search_similar_faces(self, store_client, mock_httpx_client):
+        """Test searching similar faces."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "results": [
+                {"face_id": 10, "score": 0.9},
+            ],
+            "query_face_id": 456
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.search_similar_faces(face_id=456)
+
+        assert isinstance(result, SimilarFacesResponse)
+        assert result.query_face_id == 456
+        
+        call_args = mock_httpx_client.get.call_args
+        assert "intelligence/faces/456/similar" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_get_face_matches(self, store_client, mock_httpx_client):
+        """Test getting face matches."""
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {
+                "id": 1,
+                "face_id": 100,
+                "matched_face_id": 200,
+                "similarity_score": 0.95,
+                "created_at": 1234567890
+            }
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.get_face_matches(face_id=100)
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], FaceMatchResult)
+        
+        call_args = mock_httpx_client.get.call_args
+        assert "intelligence/faces/100/matches" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_update_known_person_name(self, store_client, mock_httpx_client):
+        """Test updating known person name."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "id": 1,
+            "name": "New Name",
+            "created_at": 1000,
+            "updated_at": 2000
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.patch.return_value = mock_response
+
+        result = await store_client.update_known_person_name(person_id=1, name="New Name")
+
+        assert isinstance(result, KnownPersonResponse)
+        assert result.name == "New Name"
+        
+        call_args = mock_httpx_client.patch.call_args
+        assert "intelligence/known-persons/1" in call_args[0][0]
+        assert call_args[1]["json"]["name"] == "New Name"

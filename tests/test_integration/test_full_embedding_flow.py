@@ -29,7 +29,7 @@ async def wait_for_job(
     task_type: str,
     timeout: float = 60.0,
 ) -> bool:
-    """Wait for a specific job type to complete for an entity."""
+    """Wait for ALL jobs of a specific type to complete for an entity."""
     start_time = asyncio.get_running_loop().time()
     while (asyncio.get_running_loop().time() - start_time) < timeout:
         result = await store_manager.get_entity_jobs(entity_id)
@@ -38,23 +38,23 @@ async def wait_for_job(
             await asyncio.sleep(1)
             continue
 
-        jobs = result.value_or_throw()
-        for job in jobs:
-            if job.task_type == task_type:
-                if job.status == "completed":
-                    return True
-                if job.status == "failed":
-                    logger.error(f"Job {task_type} failed for entity {entity_id}: {job.error_message}")
-                    return False
+        jobs = [j for j in result.value_or_throw() if j.task_type == task_type]
+        if not jobs:
+            # Job might not be created yet
+            await asyncio.sleep(1)
+            continue
+            
+        if all(j.status == "completed" for j in jobs):
+            return True
+        
+        if any(j.status == "failed" for j in jobs):
+            failed_job = next(j for j in jobs if j.status == "failed")
+            logger.error(f"Job {task_type} failed for entity {entity_id}: {failed_job.error_message}")
+            return False
         
         await asyncio.sleep(1)
     
     logger.error(f"Timeout waiting for {task_type} for entity {entity_id}")
-    # Print all jobs for debugging
-    result = await store_manager.get_entity_jobs(entity_id)
-    if result.is_success:
-        jobs = result.value_or_throw()
-        logger.error(f"Current jobs for entity {entity_id}: {[j.model_dump() for j in jobs]}")
     return False
 
 
@@ -63,8 +63,10 @@ async def wait_for_job(
 async def test_full_embedding_flow(
     store_manager: StoreManager,
     compute_server_info: dict,  # Wait for compute to be ready
+    tmp_path: Path,
 ):
     """Verify that uploaded images get all embeddings and face processing."""
+    from .test_utils import create_unique_copy
     
     # Increase timeout for heavy models cold start
     TIMEOUT = 300.0
@@ -74,10 +76,14 @@ async def test_full_embedding_flow(
     try:
         # 1. Upload all test images
         for filename, expected_faces in TEST_IMAGES:
-            image_path = TEST_VECTORS_DIR / "images" / filename
-            assert image_path.exists(), f"Test image not found: {image_path}"
+            source_path = TEST_VECTORS_DIR / "images" / filename
+            assert source_path.exists(), f"Test image not found: {source_path}"
+            
+            # Create a unique copy to avoid MD5 deduplication issues in group tests
+            image_path = tmp_path / f"unique_{filename}"
+            create_unique_copy(source_path, image_path)
 
-            logger.info(f"Uploading {filename}...")
+            logger.info(f"Uploading {filename} (unique copy)...")
             create_result = await store_manager.create_entity(
                 is_collection=False,
                 label=f"Test Integration {filename}",
@@ -108,13 +114,18 @@ async def test_full_embedding_flow(
                 f"CLIP embedding job failed or timed out for {entity.id}"
             
             # Verify we can download the embedding
-            embedding_result = await store_manager.download_entity_embedding(entity.id)
+            embedding_result = await store_manager.download_entity_clip_embedding(entity.id)
             assert embedding_result.is_success, "Failed to download CLIP embedding"
             assert len(embedding_result.value_or_throw()) > 0, "Empty CLIP embedding downloaded"
 
             # D. Verify DINO Embedding
             assert await wait_for_job(store_manager, entity.id, "dino_embedding", timeout=TIMEOUT), \
                 f"DINO embedding job failed or timed out for {entity.id}"
+            
+            # Verify we can download the DINO embedding
+            dino_result = await store_manager.download_entity_dino_embedding(entity.id)
+            assert dino_result.is_success, "Failed to download DINO embedding"
+            assert len(dino_result.value_or_throw()) > 0, "Empty DINO embedding downloaded"
 
             # E. If faces detected, verify Face Embeddings and Person Assignment
             if expected_faces > 0:

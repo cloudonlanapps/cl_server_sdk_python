@@ -324,25 +324,23 @@ def test_image(media_dir: Path) -> Path:
 def unique_test_image(test_image: Path, tmp_path: Path) -> Path:
     """Create a unique copy of test image to avoid MD5 deduplication."""
     import uuid
-    from PIL import Image
+    import random
+    from .test_utils import create_unique_copy
     
     unique_path = tmp_path / f"unique_{uuid.uuid4().hex}.jpg"
-    
-    with Image.open(test_image) as img:
-        # Convert to RGB to ensure we can modify pixels
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-            
-        # Modify top-left pixel slightly to ensure unique hash
-        pixels = img.load()
-        if pixels:
-            r, g, b = pixels[0, 0] # type: ignore
-            # Change blue channel by random amount or just 1
-            pixels[0, 0] = (r, g, (b + 10) % 256) # type: ignore
-        
-        img.save(unique_path)
-        
+    # Use random offset to ensure uniqueness even if multiple tests call this at once
+    create_unique_copy(test_image, unique_path, offset=random.randint(1, 250))
     return unique_path
+    
+
+@pytest.fixture
+def unique_face_single(media_dir: Path, tmp_path: Path) -> Path:
+    """Get a unique copy of the single face test image."""
+    from .test_utils import create_unique_copy
+    source = media_dir / "images" / "test_face_single.jpg"
+    dest = tmp_path / "unique_face_single.jpg"
+    create_unique_copy(source, dest)
+    return dest
 
 
 @pytest.fixture
@@ -409,10 +407,9 @@ async def cleanup_store_entities(
     Uses CLI-provided auth credentials.
     """
 
-    # Only run for store integration tests
-    if "test_store" not in request.module.__name__:
-        yield
-        return
+    # All integration tests in this folder use the store
+    import logging
+    logging.info(f"Cleaning up store for module: {request.module.__name__}")
 
     # Skip cleanup if no auth (cannot delete entities)
     if not auth_config.username:

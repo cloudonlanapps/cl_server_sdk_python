@@ -70,3 +70,34 @@ class FaceMatchResult(BaseModel):
     similarity_score: float = Field(..., description="Similarity score [0.0, 1.0]")
     created_at: int = Field(..., description="Match timestamp (milliseconds)")
     matched_face: FaceResponse | None = Field(None, description="Matched face details (optional)")
+
+
+class SimilarImageResult(BaseModel):
+    """Result item for similar image search."""
+    image_id: int = Field(..., description="Entity ID")
+    score: float = Field(..., description="Similarity score [0.0, 1.0]")
+    entity: Any | None = Field(None, description="Entity details if requested")
+
+
+class SimilarImagesResponse(BaseModel):
+    """Response for similar image search."""
+    results: list[SimilarImageResult] = Field(..., description="List of similar images")
+    query_image_id: int = Field(..., description="ID of the query image")
+
+
+class SimilarFaceResult(BaseModel):
+    """Result item for similar face search."""
+    face_id: int = Field(..., description="Face ID")
+    score: float = Field(..., description="Similarity score [0.0, 1.0]")
+    face: FaceResponse | None = Field(None, description="Face details if available")
+
+
+class SimilarFacesResponse(BaseModel):
+    """Response for similar face search."""
+    results: list[SimilarFaceResult] = Field(..., description="List of similar faces")
+    query_face_id: int = Field(..., description="ID of the query face")
+
+
+class UpdatePersonNameRequest(BaseModel):
+    """Request to update a known person's name."""
+    name: str = Field(..., description="New name for the person")

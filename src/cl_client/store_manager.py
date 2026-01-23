@@ -15,6 +15,7 @@ import httpx
 from .auth import JWTAuthProvider
 from .server_config import ServerConfig
 from .store_client import StoreClient
+from .types import UNSET, Unset
 from .store_models import (
     Entity,
     EntityListResponse,
@@ -24,8 +25,11 @@ from .store_models import (
 )
 from .intelligence_models import (
     EntityJobResponse,
+    FaceMatchResult,
     FaceResponse,
     KnownPersonResponse,
+    SimilarFacesResponse,
+    SimilarImagesResponse,
 )
 
 
@@ -335,10 +339,10 @@ class StoreManager:
     async def patch_entity(
         self,
         entity_id: int,
-        label: str | None = None,
-        description: str | None = None,
-        parent_id: int | None = None,
-        is_deleted: bool | None = None,
+        label: str | None | Unset = UNSET,
+        description: str | None | Unset = UNSET,
+        parent_id: int | None | Unset = UNSET,
+        is_deleted: bool | None | Unset = UNSET,
     ) -> StoreOperationResult[Entity]:
         """Partial update of an entity (PATCH).
 
@@ -512,7 +516,7 @@ class StoreManager:
         except Exception as e:
             return StoreOperationResult[list[EntityJobResponse]](error=f"Unexpected error: {str(e)}")
 
-    async def download_entity_embedding(self, entity_id: int) -> StoreOperationResult[bytes]:
+    async def download_entity_clip_embedding(self, entity_id: int) -> StoreOperationResult[bytes]:
         """Download entity CLIP embedding as .npy bytes.
 
         Args:
@@ -522,9 +526,29 @@ class StoreManager:
             StoreOperationResult with raw bytes of .npy file
         """
         try:
-            data = await self._store_client.download_entity_embedding(entity_id)
+            data = await self._store_client.download_entity_clip_embedding(entity_id)
             return StoreOperationResult[bytes](
-                success="Embedding downloaded successfully",
+                success="CLIP embedding downloaded successfully",
+                data=data,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bytes], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bytes](error=f"Unexpected error: {str(e)}")
+
+    async def download_entity_dino_embedding(self, entity_id: int) -> StoreOperationResult[bytes]:
+        """Download entity DINO embedding as .npy bytes.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with raw bytes of .npy file
+        """
+        try:
+            data = await self._store_client.download_entity_dino_embedding(entity_id)
+            return StoreOperationResult[bytes](
+                success="DINO embedding downloaded successfully",
                 data=data,
             )
         except httpx.HTTPStatusError as e:
@@ -588,3 +612,113 @@ class StoreManager:
             return cast(StoreOperationResult[list[FaceResponse]], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[list[FaceResponse]](error=f"Unexpected error: {str(e)}")
+
+    async def search_similar_images(
+        self,
+        entity_id: int,
+        limit: int = 5,
+        score_threshold: float = 0.85,
+        include_details: bool = False,
+    ) -> StoreOperationResult[SimilarImagesResponse]:
+        """Find similar images using CLIP embeddings.
+
+        Args:
+            entity_id: Entity ID
+            limit: Maximum number of results
+            score_threshold: Minimum similarity score (0.0 - 1.0)
+            include_details: Whether to include full entity details
+
+        Returns:
+            StoreOperationResult with SimilarImagesResponse
+        """
+        try:
+            result = await self._store_client.search_similar_images(
+                entity_id=entity_id,
+                limit=limit,
+                score_threshold=score_threshold,
+                include_details=include_details,
+            )
+            return StoreOperationResult[SimilarImagesResponse](
+                success="Similar images retrieved successfully",
+                data=result,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[SimilarImagesResponse], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[SimilarImagesResponse](error=f"Unexpected error: {str(e)}")
+
+    async def search_similar_faces(
+        self,
+        face_id: int,
+        limit: int = 5,
+        threshold: float = 0.7,
+    ) -> StoreOperationResult[SimilarFacesResponse]:
+        """Find similar faces using face embeddings.
+
+        Args:
+            face_id: Face ID
+            limit: Maximum number of results
+            threshold: Minimum similarity score (0.0 - 1.0)
+
+        Returns:
+            StoreOperationResult with SimilarFacesResponse
+        """
+        try:
+            result = await self._store_client.search_similar_faces(
+                face_id=face_id,
+                limit=limit,
+                threshold=threshold,
+            )
+            return StoreOperationResult[SimilarFacesResponse](
+                success="Similar faces retrieved successfully",
+                data=result,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[SimilarFacesResponse], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[SimilarFacesResponse](error=f"Unexpected error: {str(e)}")
+
+    async def get_face_matches(self, face_id: int) -> StoreOperationResult[list[FaceMatchResult]]:
+        """Get all match records for a face.
+
+        Args:
+            face_id: Face ID
+
+        Returns:
+            StoreOperationResult with list of FaceMatchResult
+        """
+        try:
+            matches = await self._store_client.get_face_matches(face_id)
+            return StoreOperationResult[list[FaceMatchResult]](
+                success="Face matches retrieved successfully",
+                data=matches,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[list[FaceMatchResult]], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[list[FaceMatchResult]](error=f"Unexpected error: {str(e)}")
+
+    async def update_known_person_name(
+        self,
+        person_id: int,
+        name: str,
+    ) -> StoreOperationResult[KnownPersonResponse]:
+        """Update a known person's name.
+
+        Args:
+            person_id: Known Person ID
+            name: New name
+
+        Returns:
+            StoreOperationResult with updated KnownPersonResponse
+        """
+        try:
+            person = await self._store_client.update_known_person_name(person_id, name)
+            return StoreOperationResult[KnownPersonResponse](
+                success="Person name updated successfully",
+                data=person,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[KnownPersonResponse], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[KnownPersonResponse](error=f"Unexpected error: {str(e)}")

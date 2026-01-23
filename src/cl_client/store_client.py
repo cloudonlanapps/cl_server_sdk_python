@@ -16,12 +16,18 @@ from cl_client.store_models import (
     EntityListResponse,
     EntityVersion,
     RootResponse,
+    EntityVersion,
+    RootResponse,
     StoreConfig,
 )
+from cl_client.types import UNSET, Unset
 from cl_client.intelligence_models import (
     EntityJobResponse,
+    FaceMatchResult,
     FaceResponse,
     KnownPersonResponse,
+    SimilarFacesResponse,
+    SimilarImagesResponse,
 )
 
 
@@ -141,6 +147,15 @@ class StoreClient:
             "page": page,
             "page_size": page_size,
         }
+        if search_query:
+            params["search_query"] = search_query
+        if version is not None:
+            params["version"] = version
+        if exclude_deleted:
+            params["exclude_deleted"] = "true"
+        # Type check doesn't know about filter_param yet in args, adding it manually
+        # implementation details below
+
         if search_query:
             params["search_query"] = search_query
         if version is not None:
@@ -327,21 +342,21 @@ class StoreClient:
     async def patch_entity(
         self,
         entity_id: int,
-        label: str | None = None,
-        description: str | None = None,
-        is_deleted: bool | None = None,
-        is_collection: bool | None = None,
-        parent_id: int | None = None,
+        label: str | None | Unset = UNSET,
+        description: str | None | Unset = UNSET,
+        is_deleted: bool | None | Unset = UNSET,
+        is_collection: bool | None | Unset = UNSET,
+        parent_id: int | None | Unset = UNSET,
     ) -> Entity:
         """Patch an entity (partial update).
 
         Args:
             entity_id: Entity ID
-            label: Optional new label
-            description: Optional new description
-            is_deleted: Optional soft delete status
-            is_collection: Optional collection status
-            parent_id: Optional parent collection ID
+            label: Optional new label (use UNSET to leave unchanged)
+            description: Optional new description (use UNSET to leave unchanged)
+            is_deleted: Optional soft delete status (use UNSET to leave unchanged)
+            is_collection: Optional collection status (use UNSET to leave unchanged)
+            parent_id: Optional parent ID (use UNSET to leave unchanged, None to unset parent)
 
         Returns:
             Updated Entity
@@ -353,16 +368,69 @@ class StoreClient:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
         data: dict[str, str] = {}
-        if label is not None:
-            data["label"] = label
-        if description is not None:
-            data["description"] = description
-        if is_deleted is not None:
-            data["is_deleted"] = str(is_deleted).lower()
-        if is_collection is not None:
-            data["is_collection"] = str(is_collection).lower()
-        if parent_id is not None:
-            data["parent_id"] = str(parent_id)
+        if not isinstance(label, Unset):
+            # If explicit None, send empty string? Or server handles explicit None?
+            # Server form receiving: label: str | None = Form(None)
+            # If we send "label": None in param with httpx form, it might be string "None" or empty.
+            # Best practice for Form: if None, do not send key if we want default None?
+            # BUT patch needs to distinguish "don't change" (UNSET) vs "set to null" (None).
+            # Server code: `if label is not None: patch_data["label"] = label`
+            # Server `label` default is None. So if we don't send it, it's None, so it's not added to patch_data.
+            # This implies we CANNOT set label to None currently on server if check is `is not None`.
+            # Wait, server `patch_entity` says:
+            # `if label is not None: patch_data["label"] = label`
+            # If we want to unset label, we assume label is required string usually?
+            # Actually label is `str | None`. If we want to set it to None, we'd need to send something that server converts to None?
+            # Server: `label: str | None = Form(None)`.
+            # If we send nothing, it is None. `patch_data["label"] = label` -> runs.
+            # So if we send nothing, `label` is None, and `patch_data` gets `label`=None.
+            # `BodyPatchEntity`: `label: str | None = Field(None)`.
+            # `model_construct(..., _fields_set=...)`.
+            # If `label` is in `_fields_set`, it updates.
+            # If we don't send key in Form, `label` arg is None.
+            # CAUTION: Server code: `label: str | None = Form(None)`.
+            # If we DO NOT send `label`, `label` is `None`. Then `if label is not None` is False. Code block SKIPPED.
+            # So sending NOTHING means NO CHANGE.
+            # To set to None... we can't with current server logic `if label is not None`.
+            # UNLESS `label` is required? No form default is None.
+            # Let's assume standard behavior:
+            # UNSET -> Don't send key.
+            # Value -> Send key.
+            # None -> Send key with empty value? or special null?
+            # Httpx data dict: if value is None, what happens?
+            # We'll treat None as empty string for optional text fields if that's safer, but for now:
+            if label is None:
+                 # If we want to unset, server needs to support it. 
+                 # Current server `patch_entity` logic for label: `if label is not None`. 
+                 # So we literally cannot set it to None via that endpoint logic if we pass None to it?
+                 # Wait, if we pass "", it is not None. `patch_data["label"] = ""` -> Label becomes empty string.
+                 # If validation allows empty string, that might be "unset".
+                 data["label"] = ""
+            else:
+                 data["label"] = label
+
+        if not isinstance(description, Unset):
+            if description is None:
+                data["description"] = ""
+            else:
+                data["description"] = description
+
+        if not isinstance(is_deleted, Unset) and is_deleted is not None:
+             data["is_deleted"] = str(is_deleted).lower()
+
+        if not isinstance(is_collection, Unset) and is_collection is not None:
+             data["is_collection"] = str(is_collection).lower()
+
+        if not isinstance(parent_id, Unset):
+             if parent_id is None:
+                  data["parent_id"] = ""
+             else:
+                  data["parent_id"] = str(parent_id)
+        
+        # NOTE: Server `patch_entity` explicitly checks `if "parent_id" in form_keys`
+        # and treats empty string as None. So sending "" works for unsetting parent_id.
+        # For label/description, server `if label is not None` means we can't set it to None 
+        # unless "" is treated as value.
 
         response = await self._client.patch(
             f"{self._base_url}/entities/{entity_id}",
@@ -519,7 +587,9 @@ class StoreClient:
         adapter = TypeAdapter(list[EntityJobResponse])
         return adapter.validate_python(response.json())
 
-    async def download_entity_embedding(self, entity_id: int) -> bytes:
+        return response.content
+    
+    async def download_entity_clip_embedding(self, entity_id: int) -> bytes:
         """Download entity CLIP embedding as .npy bytes.
 
         Args:
@@ -535,7 +605,29 @@ class StoreClient:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
         response = await self._client.get(
-            f"{self._base_url}/intelligence/entities/{entity_id}/embedding",
+            f"{self._base_url}/intelligence/entities/{entity_id}/clip_embedding",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.content
+
+    async def download_entity_dino_embedding(self, entity_id: int) -> bytes:
+        """Download entity DINO embedding as .npy bytes.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Raw bytes of .npy file
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}/dino_embedding",
             headers=self._get_headers(),
         )
         _ = response.raise_for_status()
@@ -605,6 +697,118 @@ class StoreClient:
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[FaceResponse])
         return adapter.validate_python(response.json())
+
+    async def search_similar_images(
+        self,
+        entity_id: int,
+        limit: int = 5,
+        score_threshold: float = 0.85,
+        include_details: bool = False,
+    ) -> SimilarImagesResponse:
+        """Find similar images using CLIP embeddings.
+
+        Args:
+            entity_id: Entity ID
+            limit: Maximum number of results
+            score_threshold: Minimum similarity score (0.0 - 1.0)
+            include_details: Whether to include full entity details
+
+        Returns:
+            SimilarImagesResponse object
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        params = {
+            "limit": limit,
+            "score_threshold": score_threshold,
+            "include_details": str(include_details).lower(),
+        }
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}/similar",
+            params=params,
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return SimilarImagesResponse.model_validate(response.json())
+
+    async def search_similar_faces(
+        self,
+        face_id: int,
+        limit: int = 5,
+        threshold: float = 0.7,
+    ) -> SimilarFacesResponse:
+        """Find similar faces using face embeddings.
+
+        Args:
+            face_id: Face ID
+            limit: Maximum number of results
+            threshold: Minimum similarity score (0.0 - 1.0)
+
+        Returns:
+            SimilarFacesResponse object
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        params = {
+            "limit": limit,
+            "threshold": threshold,
+        }
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/faces/{face_id}/similar",
+            params=params,
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return SimilarFacesResponse.model_validate(response.json())
+
+    async def get_face_matches(self, face_id: int) -> list[FaceMatchResult]:
+        """Get all match records for a face.
+
+        Args:
+            face_id: Face ID
+
+        Returns:
+            List of FaceMatchResult
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/faces/{face_id}/matches",
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        adapter = TypeAdapter(list[FaceMatchResult])
+        return adapter.validate_python(response.json())
+
+    async def update_known_person_name(
+        self,
+        person_id: int,
+        name: str,
+    ) -> KnownPersonResponse:
+        """Update a known person's name.
+
+        Args:
+            person_id: Known Person ID
+            name: New name
+
+        Returns:
+            Updated KnownPersonResponse
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.patch(
+            f"{self._base_url}/intelligence/known-persons/{person_id}",
+            json={"name": name},
+            headers=self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return KnownPersonResponse.model_validate(response.json())
 
 
 

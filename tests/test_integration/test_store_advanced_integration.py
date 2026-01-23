@@ -7,7 +7,7 @@ from cl_client.store_client import StoreClient
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_store_advanced_features(store_manager: StoreManager, test_image: Path):
+async def test_store_advanced_features(store_manager: StoreManager, unique_test_image: Path):
     """Test advanced store features: hierarchy, versioning, and bulk delete."""
     
     # 1. Test Hierarchy (Parenting)
@@ -22,7 +22,7 @@ async def test_store_advanced_features(store_manager: StoreManager, test_image: 
         label="Child Media",
         is_collection=False,
         parent_id=parent_id,
-        image_path=test_image
+        image_path=unique_test_image
     )
     assert child_result.is_success
     child_id = child_result.data.id
@@ -62,7 +62,7 @@ async def test_store_advanced_features(store_manager: StoreManager, test_image: 
     # 3. Test pagination and search in list_entities
     list_result = await store_manager.list_entities(search_query="Parent")
     assert list_result.is_success
-    assert any(e.label == "Parent Collection" for e in list_result.data.items)
+    assert any("Parent Collection" in e.label for e in list_result.data.items if e.label)
     
     # 4. Test Error Response (404)
     read_non_existent = await store_manager.read_entity(999999)

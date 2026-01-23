@@ -327,6 +327,52 @@ async def test_patch_entity_soft_delete(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_patch_entity_unset(
+    store_manager,
+    unique_test_image: Path,
+    auth_config: AuthConfig,
+):
+    """Test explicit field unsetting via PATCH using UNSET sentinel."""
+    from cl_client.types import UNSET
+    
+    if should_succeed(auth_config, operation_type="store_write"):
+        # Create entity with optional fields set
+        create_result = await store_manager.create_entity(
+            label="Original Label",
+            description="Original Description",
+            is_collection=False,
+            image_path=unique_test_image,
+        )
+        assert create_result.is_success
+        entity_id = create_result.data.id
+        
+        # 1. Test unsetting description (set to None)
+        # Note: We pass None to unset, and UNSET (default) to keep unchanged
+        patch_result = await store_manager.patch_entity(
+            entity_id=entity_id,
+            description=None, # Should unset
+            label=UNSET,      # Should keep unchanged
+        )
+        assert patch_result.is_success
+        assert patch_result.data.description is None or patch_result.data.description == ""
+        assert patch_result.data.label == "Original Label"
+        
+        # 2. Test updating label while keeping description unset
+        patch_result_2 = await store_manager.patch_entity(
+            entity_id=entity_id,
+            label="New Label",
+            description=UNSET,
+        )
+        assert patch_result_2.is_success
+        assert patch_result_2.data.label == "New Label"
+        assert patch_result_2.data.description is None or patch_result_2.data.description == ""
+        
+        # Cleanup
+        await store_manager.delete_entity(entity_id)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_delete_entity(
     store_manager,
     unique_test_image: Path,
