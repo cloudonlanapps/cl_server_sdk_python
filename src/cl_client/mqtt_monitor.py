@@ -72,7 +72,7 @@ class MQTTJobMonitor:
         self.broker: str = broker or ComputeClientConfig.MQTT_BROKER_HOST
         self.port: int = port or ComputeClientConfig.MQTT_BROKER_PORT
 
-        # Job subscriptions: subscription_id -> (job_id, callbacks)
+        # Job subscriptions: subscription_id -> (job_id, on_progress, on_complete, task_type)
         self._job_subscriptions: dict[
             str,
             tuple[
@@ -83,6 +83,7 @@ class MQTTJobMonitor:
                 Callable[[JobResponse], None]
                 | Callable[[JobResponse], Awaitable[None]]
                 | None,
+                str,
             ],
         ] = {}
 
@@ -232,11 +233,7 @@ class MQTTJobMonitor:
                         if isinstance(updateMsg.progress, (int, float))
                         else 0
                     ),
-                    created_at=(
-                        int(updateMsg.timestamp)
-                        if isinstance(updateMsg.timestamp, (int, float))
-                        else 0
-                    ),
+                    created_at=int(updateMsg.timestamp),
                     params={},
                     task_output=None,
                     error_message=None,
