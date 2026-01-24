@@ -26,12 +26,31 @@ from .models import (
     WorkerCapability,
 )
 
+# Singleton registry for shared MQTT monitors: (broker, port) -> (monitor, ref_count)
+_mqtt_registry: dict[tuple[str, int], tuple[MQTTJobMonitor, int]] = {}
+_registry_lock = threading.Lock()
+
 
 class JobEventPayload(BaseModel):
     job_id: str
     event_type: str
     timestamp: int
     progress: int | float | None = None
+
+
+class EntityStatusDetails(BaseModel):
+    face_detection: str | None = None
+    face_count: int | None = None
+    clip_embedding: str | None = None
+    dino_embedding: str | None = None
+    face_embeddings: list[str] | None = None
+
+
+class EntityStatusPayload(BaseModel):
+    entity_id: int
+    status: str
+    details: EntityStatusDetails
+    timestamp: int
 
 
 class MQTTJobMonitor:
@@ -72,6 +91,12 @@ class MQTTJobMonitor:
         self._worker_callbacks: list[Callable[[str, WorkerCapability | None], None]] = (
             []
         )
+
+        # Entity subscriptions: subscription_id -> (entity_id, callback)
+        self._entity_subscriptions: dict[
+            str,
+            tuple[int, Callable[[EntityStatusPayload], None] | Callable[[EntityStatusPayload], Awaitable[None]]],
+        ] = {}
 
         # Connection event for blocking until connected
         self._connect_event: threading.Event = threading.Event()
@@ -152,6 +177,9 @@ class MQTTJobMonitor:
             # Check if it's a job event message
             elif msg.topic == ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC:
                 self._handle_job_event(msg)
+            # Check if it's an entity status message
+            elif "entity_item_status" in msg.topic:
+                self._handle_entity_status(msg)
         except Exception as e:
             logger.error(f"Error handling MQTT message: {e}", exc_info=True)
 
@@ -267,6 +295,35 @@ class MQTTJobMonitor:
         except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as e:
             logger.warning(f"Invalid job event message: {e}")
 
+    def _handle_entity_status(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle entity status message."""
+        if not msg.payload:
+            return
+
+        try:
+            payload = EntityStatusPayload.model_validate_json(msg.payload.decode())
+            entity_id = payload.entity_id
+
+            # Dispatch to subscribers
+            for _sub_id, (sub_entity_id, callback) in list(self._entity_subscriptions.items()):
+                if sub_entity_id != entity_id:
+                    continue
+                
+                try:
+                    import inspect
+                    if inspect.iscoroutinefunction(callback):
+                        if self._event_loop and self._event_loop.is_running():
+                            _ = asyncio.run_coroutine_threadsafe(
+                                callback(payload), self._event_loop
+                            )
+                    else:
+                        _ = callback(payload)
+                except Exception as e:
+                    logger.error(f"Error in entity status callback: {e}", exc_info=True)
+
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.warning(f"Invalid entity status message: {e}")
+
     def _update_worker(self, capability: WorkerCapability) -> None:
         """Update worker capability state."""
         self._workers[capability.worker_id] = capability
@@ -342,6 +399,45 @@ class MQTTJobMonitor:
         )
 
         return subscription_id
+
+    def subscribe_entity_status(
+        self,
+        entity_id: int,
+        store_port: int,
+        on_update: Callable[[EntityStatusPayload], None] | Callable[[EntityStatusPayload], Awaitable[None]],
+    ) -> str:
+        """Subscribe to entity status updates.
+
+        Args:
+            entity_id: Entity ID to monitor
+            store_port: Port of the store service managing this entity
+            on_update: Callback for status updates
+
+        Returns:
+            Subscription ID
+        """
+        subscription_id = str(uuid.uuid4())
+        
+        # Capture event loop
+        if self._event_loop is None:
+            try:
+                self._event_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+        
+        self._entity_subscriptions[subscription_id] = (entity_id, on_update)
+        
+        # Subscribe to MQTT topic
+        topic = f"mInsight/{store_port}/entity_item_status/{entity_id}"
+        _ = self._client.subscribe(topic)
+        logger.debug(f"Subscribed to entity status: {topic}")
+        
+        return subscription_id
+
+    def unsubscribe_entity_status(self, subscription_id: str) -> None:
+        """Unsubscribe from entity status updates."""
+        if subscription_id in self._entity_subscriptions:
+            del self._entity_subscriptions[subscription_id]
 
     def unsubscribe(self, subscription_id: str) -> None:
         """Unsubscribe from job updates using subscription ID.
@@ -423,3 +519,64 @@ class MQTTJobMonitor:
         _ = self._client.disconnect()
         self._connected = False
         logger.info("MQTT monitor closed")
+
+
+def get_mqtt_monitor(broker: str | None = None, port: int | None = None) -> MQTTJobMonitor:
+    """Get shared MQTT monitor instance with reference counting.
+    
+    Args:
+        broker: Broker host (default from config)
+        port: Broker port (default from config)
+        
+    Returns:
+        Shared MQTTJobMonitor instance
+    """
+    broker = broker or ComputeClientConfig.MQTT_BROKER_HOST
+    port = port or ComputeClientConfig.MQTT_BROKER_PORT
+    key = (broker, port)
+    
+    with _registry_lock:
+        if key in _mqtt_registry:
+            monitor, count = _mqtt_registry[key]
+            _mqtt_registry[key] = (monitor, count + 1)
+            logger.debug(f"Reusing MQTT monitor for {broker}:{port} (ref_count={count + 1})")
+            return monitor
+            
+        monitor = MQTTJobMonitor(broker=broker, port=port)
+        _mqtt_registry[key] = (monitor, 1)
+        logger.debug(f"Created new MQTT monitor for {broker}:{port}")
+        return monitor
+
+
+def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
+    """Release reference to shared MQTT monitor.
+    
+    Decrements reference count. If 0, closes and removes monitor.
+    """
+    key = (monitor.broker, monitor.port)
+    
+    with _registry_lock:
+        if key not in _mqtt_registry:
+            logger.warning(f"Attempting to release unknown MQTT monitor: {key}")
+            # Ensure it's closed regardless
+            try:
+                monitor.close()
+            except Exception:
+                pass
+            return
+            
+        stored_monitor, count = _mqtt_registry[key]
+        
+        # Sanity check
+        if stored_monitor is not monitor:
+            logger.warning("Releasing monitor that doesn't match registry instance")
+            
+        if count <= 1:
+            # Last reference, close and remove
+            logger.debug(f"Closing MQTT monitor for {key} (ref_count=0)")
+            monitor.close()
+            del _mqtt_registry[key]
+        else:
+            # Decrement
+            _mqtt_registry[key] = (stored_monitor, count - 1)
+            logger.debug(f"Released MQTT monitor for {key} (ref_count={count - 1})")

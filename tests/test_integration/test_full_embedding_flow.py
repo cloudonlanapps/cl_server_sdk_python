@@ -25,41 +25,6 @@ TEST_IMAGES = [
 ]
 
 
-async def wait_for_job(
-    store_manager: StoreManager,
-    entity_id: int,
-    task_type: str,
-    timeout: float = 60.0,
-) -> bool:
-    """Wait for ALL jobs of a specific type to complete for an entity."""
-    start_time = asyncio.get_running_loop().time()
-    while (asyncio.get_running_loop().time() - start_time) < timeout:
-        result = await store_manager.get_entity_jobs(entity_id)
-        if result.is_error:
-            logger.error(f"Failed to get jobs for entity {entity_id}: {result.error}")
-            await asyncio.sleep(1)
-            continue
-
-        jobs = [j for j in result.value_or_throw() if j.task_type == task_type]
-        if not jobs:
-            # Job might not be created yet
-            await asyncio.sleep(1)
-            continue
-            
-        if all(j.status == "completed" for j in jobs):
-            return True
-        
-        if any(j.status == "failed" for j in jobs):
-            failed_job = next(j for j in jobs if j.status == "failed")
-            logger.error(f"Job {task_type} failed for entity {entity_id}: {failed_job.error_message}")
-            return False
-        
-        await asyncio.sleep(1)
-    
-    logger.error(f"Timeout waiting for {task_type} for entity {entity_id}")
-    return False
-
-
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_full_embedding_flow(
@@ -96,13 +61,28 @@ async def test_full_embedding_flow(
             created_entities.append((entity, expected_faces))
             logger.info(f"Created entity {entity.id} for {filename}")
 
+            # Start monitoring/waiting immediately after creation
+            # We can wait for each one legally here or gather them if we wanted parallel processing
+            # For now, sequential per-image verification as per original flow logic (mostly)
+            # but original loop created all then verified all? No, original loop created all then verified all.
+        
         # 2. Verify processing for each entity
         for entity, expected_faces in created_entities:
-            logger.info(f"Verifying processing for entity {entity.id} ({entity.label})")
+            logger.info(f"Waiting for entity {entity.id} ({entity.label}) to complete processing...")
+            
+            # New event-driven wait
+            try:
+                status_payload = await store_manager.wait_for_entity_status(
+                    entity_id=entity.id,
+                    target_status="completed",
+                    timeout=TIMEOUT
+                )
+                logger.info(f"Entity {entity.id} completed with final status: {status_payload}")
+            except Exception as e:
+                pytest.fail(f"Entity {entity.id} failed to complete: {e}")
 
-            # A. Verify Face Detection Job
-            assert await wait_for_job(store_manager, entity.id, "face_detection", timeout=TIMEOUT), \
-                f"Face detection job failed or timed out for {entity.id}"
+            # Verify all artifacts are present
+            logger.info(f"Verifying artifacts for entity {entity.id}...")
 
             # B. Verify Face Count
             faces_result = await store_manager.get_entity_faces(entity.id)
@@ -112,30 +92,17 @@ async def test_full_embedding_flow(
                 f"Expected {expected_faces} faces, found {len(faces)} for {entity.label}"
 
             # C. Verify CLIP Embedding
-            assert await wait_for_job(store_manager, entity.id, "clip_embedding", timeout=TIMEOUT), \
-                f"CLIP embedding job failed or timed out for {entity.id}"
-            
-            # Verify we can download the embedding
             embedding_result = await store_manager.download_entity_clip_embedding(entity.id)
             assert embedding_result.is_success, "Failed to download CLIP embedding"
             assert len(embedding_result.value_or_throw()) > 0, "Empty CLIP embedding downloaded"
 
             # D. Verify DINO Embedding
-            assert await wait_for_job(store_manager, entity.id, "dino_embedding", timeout=TIMEOUT), \
-                f"DINO embedding job failed or timed out for {entity.id}"
-            
-            # Verify we can download the DINO embedding
             dino_result = await store_manager.download_entity_dino_embedding(entity.id)
             assert dino_result.is_success, "Failed to download DINO embedding"
             assert len(dino_result.value_or_throw()) > 0, "Empty DINO embedding downloaded"
 
             # E. If faces detected, verify Face Embeddings and Person Assignment
             if expected_faces > 0:
-                # Wait for face embedding jobs (one per face, mapped to parent entity)
-                # Note: "face_embedding" jobs are tracked on the parent entity
-                assert await wait_for_job(store_manager, entity.id, "face_embedding", timeout=TIMEOUT), \
-                    f"Face embedding job failed for {entity.id}"
-
                 # Verify each face has a known person or embedding
                 for face in faces:
                     # Check if face embedding can be downloaded
@@ -143,7 +110,6 @@ async def test_full_embedding_flow(
                     assert face_emb_result.is_success, f"Failed to download embedding for face {face.id}"
                     
                     # Verify person assignment (might be None if new person, but field should exist)
-                    # Note: We don't enforce *which* person, just that the data structure is valid
                     logger.info(f"Face {face.id} assigned to person: {face.known_person_id}")
 
     finally:

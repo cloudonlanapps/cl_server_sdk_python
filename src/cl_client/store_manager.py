@@ -11,10 +11,14 @@ from pathlib import Path
 from typing import cast
 
 import httpx
+import uuid
+import asyncio
 
 from .auth import JWTAuthProvider
+from .config import ComputeClientConfig
 from .server_config import ServerConfig
 from .store_client import StoreClient
+from .mqtt_monitor import MQTTJobMonitor, EntityStatusPayload, get_mqtt_monitor, release_mqtt_monitor
 from .types import UNSET, Unset
 from .store_models import (
     Entity,
@@ -71,13 +75,40 @@ class StoreManager:
         """Initialize with a StoreClient.
 
         Args:
-            store_client: Configured StoreClient instance
-
-        Note:
-            Prefer using guest() or authenticated() class methods instead
-            of calling this constructor directly.
+        store_client: Configured StoreClient instance
+            config: Server configuration (needed for MQTT connection info)
         """
         self._store_client: StoreClient = store_client
+        self._mqtt_monitor: MQTTJobMonitor | None = None
+        
+        # Try to infer config from client or passed arg (not passed here though)
+        # We'll initialize MQTT monitor lazily or if config is available
+        # But __init__ signature here takes store_client only.
+        # We need config for MQTT broker details.
+        
+        # NOTE: Facades usually created via Guest/Authenticated factories which have config.
+        # We should pass config to __init__ if possible or set it.
+        self._config: ServerConfig | None = None
+        self._mqtt_subscriptions: dict[str, str] = {} # user_sub_id -> internal_sub_id
+
+    def _get_mqtt_monitor(self) -> MQTTJobMonitor:
+        """Get or create MQTT monitor (lazy init)."""
+        if self._mqtt_monitor:
+            return self._mqtt_monitor
+        
+        # Need config to init MQTT
+        # If created via guest() or authenticated(), we might have config stored?
+        # Updated factories to pass config or we use defaults.
+        
+        broker = ComputeClientConfig.MQTT_BROKER_HOST
+        port = ComputeClientConfig.MQTT_BROKER_PORT
+        
+        if self._config:
+            broker = self._config.mqtt_broker
+            port = self._config.mqtt_port
+            
+        self._mqtt_monitor = get_mqtt_monitor(broker=broker, port=port)
+        return self._mqtt_monitor
 
     @property
     def store_client(self) -> StoreClient:
@@ -105,7 +136,9 @@ class StoreManager:
         Returns:
             StoreManager instance configured for guest access
         """
-        return cls(StoreClient(base_url=base_url, timeout=timeout))
+        manager = cls(StoreClient(base_url=base_url, timeout=timeout))
+        # Note: Guest mode usually doesn't have config object passed, so we rely on defaults
+        return manager
 
     @classmethod
     def authenticated(
@@ -133,7 +166,9 @@ class StoreManager:
             get_cached_token=get_cached_token,
             get_valid_token_async=get_valid_token_async
         )
-        return cls(StoreClient(base_url=url, auth_provider=auth_provider, timeout=timeout))
+        manager = cls(StoreClient(base_url=url, auth_provider=auth_provider, timeout=timeout))
+        manager._config = config
+        return manager
 
     async def __aenter__(self) -> "StoreManager":
         """Async context manager entry."""
@@ -142,7 +177,14 @@ class StoreManager:
 
     async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
-        await self._store_client.__aexit__(exc_type, exc_val, exc_tb)
+        await self.close()
+
+    async def close(self) -> None:
+        """Close HTTP session and cleanup resources."""
+        await self._store_client.__aexit__(None, None, None)
+        if self._mqtt_monitor:
+            release_mqtt_monitor(self._mqtt_monitor)
+            self._mqtt_monitor = None
 
     def _handle_error(self, error: httpx.HTTPStatusError) -> StoreOperationResult[object]:
         """Map HTTP errors to StoreOperationResult.
@@ -187,7 +229,6 @@ class StoreManager:
 
         Args:
             page: Page number (1-indexed)
-            page_size: Items per page (max 100)
             page_size: Items per page (max 100)
             search_query: Optional search query for label/description
             exclude_deleted: Whether to exclude soft-deleted entities
@@ -261,6 +302,93 @@ class StoreManager:
             return cast(StoreOperationResult[list[EntityVersion]], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[list[EntityVersion]](error=f"Unexpected error: {str(e)}")
+
+    def monitor_entity(
+        self, 
+        entity_id: int, 
+        callback: Callable[[EntityStatusPayload], None] | Callable[[EntityStatusPayload], Awaitable[None]]
+    ) -> str:
+        """Monitor entity status changes via MQTT.
+        
+        Args:
+            entity_id: Entity ID to monitor
+            callback: Function called on status updates
+            
+        Returns:
+            Subscription ID (use with stop_monitoring)
+        """
+        monitor = self._get_mqtt_monitor()
+        
+        # Determine store port (usually from config or default)
+        store_port = 8001
+        if self._config:
+            try:
+                # Extract port from store_url if possible, usually http://host:port/...
+                from urllib.parse import urlparse
+                parsed = urlparse(self._config.store_url)
+                if parsed.port:
+                    store_port = parsed.port
+            except Exception:
+                pass
+        
+        internal_sub_id = monitor.subscribe_entity_status(entity_id, store_port, callback)
+        user_sub_id = str(uuid.uuid4())
+        self._mqtt_subscriptions[user_sub_id] = internal_sub_id
+        return user_sub_id
+
+    def stop_monitoring(self, subscription_id: str) -> None:
+        """Stop monitoring an entity.
+        
+        Args:
+            subscription_id: ID returned from monitor_entity
+        """
+        if subscription_id in self._mqtt_subscriptions:
+            internal_id = self._mqtt_subscriptions[subscription_id]
+            if self._mqtt_monitor:
+                self._mqtt_monitor.unsubscribe_entity_status(internal_id)
+            del self._mqtt_subscriptions[subscription_id]
+
+    async def wait_for_entity_status(
+        self, 
+        entity_id: int, 
+        target_status: str = "completed", 
+        timeout: float = 60.0,
+        fail_on_error: bool = True
+    ) -> EntityStatusPayload:
+        """Wait for entity to reach specific status.
+        
+        Args:
+            entity_id: Entity ID
+            target_status: Status to wait for (default: "completed")
+            timeout: Max wait time in seconds
+            fail_on_error: If True, raises exception if status becomes "failed"
+            
+        Returns:
+            Final status payload
+            
+        Raises:
+            TimeoutError: If timeout reached
+            RuntimeError: If failed (and fail_on_error=True)
+        """
+        future = asyncio.get_running_loop().create_future()
+        
+        def _callback(payload: EntityStatusPayload):
+            if future.done():
+                return
+                
+            if payload.status == target_status:
+                future.set_result(payload)
+            elif fail_on_error and payload.status == "failed":
+                future.set_exception(RuntimeError(f"Entity processing failed: {payload}"))
+                
+        sub_id = self.monitor_entity(entity_id, _callback)
+        
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Timeout waiting for entity {entity_id} to reach {target_status}")
+        finally:
+            self.stop_monitoring(sub_id)
 
     # Write operations
 

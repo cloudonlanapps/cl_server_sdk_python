@@ -21,7 +21,7 @@ from cl_client.plugins.base import ClientProtocol
 
 from .auth import AuthProvider, NoAuthProvider
 from .config import ComputeClientConfig
-from .mqtt_monitor import MQTTJobMonitor
+from .mqtt_monitor import MQTTJobMonitor, get_mqtt_monitor, release_mqtt_monitor
 from .server_config import ServerConfig
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ class ComputeClient(ClientProtocol):
         # Use explicit parameters if provided, otherwise fall back to config
         mqtt_broker_final = mqtt_broker or config.mqtt_broker
         mqtt_port_final = mqtt_port or config.mqtt_port
-        self._mqtt: MQTTJobMonitor = MQTTJobMonitor(broker=mqtt_broker_final, port=mqtt_port_final)
+        self._mqtt: MQTTJobMonitor = get_mqtt_monitor(broker=mqtt_broker_final, port=mqtt_port_final)
 
     async def update_guest_mode(self, guest_mode: bool) -> bool:
         """Update guest mode configuration (admin only).
@@ -553,7 +553,8 @@ class ComputeClient(ClientProtocol):
     async def close(self) -> None:
         """Close client connections and cleanup resources."""
         await self._session.aclose()
-        self._mqtt.close()
+        if hasattr(self, "_mqtt"):
+            release_mqtt_monitor(self._mqtt)
 
     async def __aenter__(self) -> ComputeClient:
         """Async context manager entry."""
