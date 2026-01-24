@@ -13,7 +13,6 @@ from typing import cast
 import httpx
 import uuid
 import asyncio
-from loguru import logger
 
 from .auth import JWTAuthProvider
 from .config import ComputeClientConfig
@@ -379,14 +378,14 @@ class StoreManager:
                 return
                 
             if payload.status == target_status:
-                loop.call_soon_threadsafe(future.set_result, payload)
+                _ = loop.call_soon_threadsafe(future.set_result, payload)
             elif fail_on_error and payload.status == "failed":
-                loop.call_soon_threadsafe(future.set_exception, RuntimeError(f"Entity processing failed: {payload}"))
+                _ = loop.call_soon_threadsafe(future.set_exception, RuntimeError(f"Entity processing failed: {payload}"))
                 
         sub_id = self.monitor_entity(entity_id, _callback)
         
         try:
-            return await asyncio.wait_for(future, timeout=timeout)
+            return await cast(Awaitable[EntityStatusPayload], asyncio.wait_for(future, timeout=timeout))
         except asyncio.TimeoutError:
             raise TimeoutError(f"Timeout waiting for entity {entity_id} to reach {target_status}")
         finally:
@@ -733,6 +732,26 @@ class StoreManager:
             return cast(StoreOperationResult[list[KnownPersonResponse]], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[list[KnownPersonResponse]](error=f"Unexpected error: {str(e)}")
+
+    async def get_known_person(self, person_id: int) -> StoreOperationResult[KnownPersonResponse]:
+        """Get known person details.
+
+        Args:
+            person_id: Known person ID
+
+        Returns:
+            StoreOperationResult with KnownPersonResponse
+        """
+        try:
+            person = await self._store_client.get_known_person(person_id)
+            return StoreOperationResult[KnownPersonResponse](
+                success="Known person details retrieved successfully",
+                data=person,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[KnownPersonResponse], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[KnownPersonResponse](error=f"Unexpected error: {str(e)}")
 
     async def get_person_faces(self, person_id: int) -> StoreOperationResult[list[FaceResponse]]:
         """Get all faces associated with a known person.

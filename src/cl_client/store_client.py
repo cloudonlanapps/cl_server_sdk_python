@@ -7,6 +7,8 @@ All write operations use multipart/form-data (not JSON).
 from pathlib import Path
 
 import httpx
+from typing import Any, cast
+
 from pydantic import TypeAdapter
 
 from cl_client.auth import AuthProvider
@@ -14,8 +16,6 @@ from cl_client.http_utils import HttpUtils
 from cl_client.store_models import (
     Entity,
     EntityListResponse,
-    EntityVersion,
-    RootResponse,
     EntityVersion,
     RootResponse,
     StoreConfig,
@@ -93,8 +93,8 @@ class StoreClient:
         headers: dict[str, str] = {}
         if self.auth_provider:
             # Check if provider supports async token refresh
-            if hasattr(self.auth_provider, 'refresh_token_if_needed'):
-                await self.auth_provider.refresh_token_if_needed()
+            if hasattr(self.auth_provider, "refresh_token_if_needed"):
+                _ = await cast(Any, self.auth_provider).refresh_token_if_needed()
             headers.update(self.auth_provider.get_headers())
         return headers
 
@@ -517,7 +517,7 @@ class StoreClient:
 
         data = {"guest_mode": str(guest_mode).lower()}
 
-        response = await self._client.put(
+        _ = await self._client.put(
             f"{self._base_url}/admin/config/guest-mode",
             data=data,
             headers=await self._get_headers(),
@@ -590,8 +590,6 @@ class StoreClient:
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[EntityJobResponse])
         return adapter.validate_python(response.json())
-
-        return response.content
     
     async def download_entity_clip_embedding(self, entity_id: int) -> bytes:
         """Download entity CLIP embedding as .npy bytes.
@@ -678,6 +676,28 @@ class StoreClient:
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[KnownPersonResponse])
         return adapter.validate_python(response.json())
+
+    async def get_known_person(self, person_id: int) -> KnownPersonResponse:
+        """Get known person details.
+
+        Args:
+            person_id: Known person ID
+
+        Returns:
+            KnownPersonResponse model
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/known-persons/{person_id}",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return KnownPersonResponse.model_validate(response.json())
 
     async def get_person_faces(self, person_id: int) -> list[FaceResponse]:
         """Get all faces associated with a known person.

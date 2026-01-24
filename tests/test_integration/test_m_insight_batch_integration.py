@@ -36,9 +36,9 @@ async def test_m_insight_batch_upload_and_queue(
     status_result = await store_manager.get_m_insight_status()
     assert status_result.is_success, f"Failed to get MInsight status: {status_result.error}"
     
-    # Check if worker is running
+    # Check if worker is running or idle (both mean it's online)
     status = status_result.data
-    assert status and status.get("status") == "running", f"MInsight worker not running. Status: {status}"
+    assert status and status.get("status") in ["running", "idle"], f"MInsight worker not online. Status: {status}"
     
     # 2. Upload 30 unique images in parallel
     NUM_IMAGES = 30
