@@ -84,13 +84,17 @@ class StoreClient:
         if self._client:
             await self._client.aclose()
 
-    def _get_headers(self) -> dict[str, str]:
+    async def _get_headers(self) -> dict[str, str]:
         """Get headers for requests (auth only, no Content-Type).
 
         Content-Type is automatically set by httpx for multipart/form-data.
+        Supports async token refresh if auth provider has refresh capability.
         """
         headers: dict[str, str] = {}
         if self.auth_provider:
+            # Check if provider supports async token refresh
+            if hasattr(self.auth_provider, 'refresh_token_if_needed'):
+                await self.auth_provider.refresh_token_if_needed()
             headers.update(self.auth_provider.get_headers())
         return headers
 
@@ -110,7 +114,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return RootResponse.model_validate(response.json())
@@ -166,7 +170,7 @@ class StoreClient:
         response = await self._client.get(
             f"{self._base_url}/entities",
             params=params,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return EntityListResponse.model_validate(response.json())
@@ -198,7 +202,7 @@ class StoreClient:
         response = await self._client.get(
             f"{self._base_url}/entities/{entity_id}",
             params=params if params else None,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return Entity.model_validate(response.json())
@@ -220,7 +224,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/entities/{entity_id}/versions",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[EntityVersion])
@@ -275,7 +279,7 @@ class StoreClient:
                 f"{self._base_url}/entities",
                 data=data,
                 files=opened_files,
-                headers=self._get_headers(),
+                headers=await self._get_headers(),
             )
             _ = response.raise_for_status()
             return Entity.model_validate(response.json())
@@ -331,7 +335,7 @@ class StoreClient:
                 f"{self._base_url}/entities/{entity_id}",
                 data=data,
                 files=opened_files,
-                headers=self._get_headers(),
+                headers=await self._get_headers(),
             )
             _ = response.raise_for_status()
             return Entity.model_validate(response.json())
@@ -435,7 +439,7 @@ class StoreClient:
         response = await self._client.patch(
             f"{self._base_url}/entities/{entity_id}",
             data=data,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return Entity.model_validate(response.json())
@@ -454,7 +458,7 @@ class StoreClient:
 
         response = await self._client.delete(
             f"{self._base_url}/entities/{entity_id}",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
 
@@ -471,7 +475,7 @@ class StoreClient:
 
         response = await self._client.delete(
             f"{self._base_url}/entities",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
 
@@ -491,7 +495,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/admin/config",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return StoreConfig.model_validate(response.json())
@@ -516,7 +520,7 @@ class StoreClient:
         response = await self._client.put(
             f"{self._base_url}/admin/config/guest-mode",
             data=data,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         return await self.get_config()
     
@@ -534,7 +538,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/m_insight/status",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return response.json()
@@ -558,7 +562,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/entities/{entity_id}/faces",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[FaceResponse])
@@ -581,7 +585,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/entities/{entity_id}/jobs",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[EntityJobResponse])
@@ -606,7 +610,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/entities/{entity_id}/clip_embedding",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return response.content
@@ -628,7 +632,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/entities/{entity_id}/dino_embedding",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return response.content
@@ -650,7 +654,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/faces/{face_id}/embedding",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return response.content
@@ -669,7 +673,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/known-persons",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[KnownPersonResponse])
@@ -692,7 +696,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/known-persons/{person_id}/faces",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[FaceResponse])
@@ -728,7 +732,7 @@ class StoreClient:
         response = await self._client.get(
             f"{self._base_url}/intelligence/entities/{entity_id}/similar",
             params=params,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return SimilarImagesResponse.model_validate(response.json())
@@ -760,7 +764,7 @@ class StoreClient:
         response = await self._client.get(
             f"{self._base_url}/intelligence/faces/{face_id}/similar",
             params=params,
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return SimilarFacesResponse.model_validate(response.json())
@@ -779,7 +783,7 @@ class StoreClient:
 
         response = await self._client.get(
             f"{self._base_url}/intelligence/faces/{face_id}/matches",
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         adapter = TypeAdapter(list[FaceMatchResult])
@@ -805,7 +809,7 @@ class StoreClient:
         response = await self._client.patch(
             f"{self._base_url}/intelligence/known-persons/{person_id}",
             json={"name": name},
-            headers=self._get_headers(),
+            headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
         return KnownPersonResponse.model_validate(response.json())

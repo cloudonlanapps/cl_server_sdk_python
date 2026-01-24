@@ -7,7 +7,7 @@ This allows easy swapping between no-auth, JWT, API key, etc.
 import base64
 import json
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import cast, override
 
@@ -65,22 +65,27 @@ class JWTAuthProvider(AuthProvider):
     """
 
     def __init__(
-        self, token: str | None = None, get_cached_token: Callable[[], str] | None = None
+        self,
+        token: str | None = None,
+        get_cached_token: Callable[[], str] | None = None,
+        get_valid_token_async: Callable[[], Awaitable[str]] | None = None
     ) -> None:
         """Initialize JWT auth provider.
 
         Args:
             token: Direct JWT token (for static token mode)
-            session_manager: SessionManager instance (for auto-refresh mode)
+            get_cached_token: Synchronous token getter (no refresh)
+            get_valid_token_async: Async token getter with auto-refresh support
 
         Raises:
-            ValueError: If neither token nor session_manager is provided
+            ValueError: If neither token nor get_cached_token is provided
         """
         if token is None and get_cached_token is None:
-            raise ValueError("Either token or session_manager must be provided")
+            raise ValueError("Either token or get_cached_token must be provided")
 
         self._token: str | None = token
         self.get_cached_token: Callable[[], str] | None = get_cached_token
+        self.get_valid_token_async: Callable[[], Awaitable[str]] | None = get_valid_token_async
 
     def _parse_token_expiry(self, token: str) -> datetime | None:
         """Parse JWT token to extract expiry time.
@@ -190,13 +195,32 @@ class JWTAuthProvider(AuthProvider):
 
         raise ValueError("No token available")
 
+    async def refresh_token_if_needed(self) -> None:
+        """Refresh token if needed using async getter.
+
+        If get_valid_token_async callback is available, calls it to refresh
+        the token. This should be called before making API requests to ensure
+        the token is fresh.
+
+        Note: If refresh fails, SessionManager will handle fallback to re-login.
+        """
+        if self.get_valid_token_async is not None:
+            try:
+                # Get refreshed token from SessionManager (handles refresh + re-login fallback)
+                refreshed_token = await self.get_valid_token_async()
+                # Token will be updated in SessionManager, no need to update here
+            except Exception:
+                # SessionManager's get_valid_token should have already handled
+                # refresh failures with re-login fallback. If it still fails, re-raise.
+                raise
+
     @override
     def get_headers(self) -> dict[str, str]:
         """Get authentication headers with Bearer token.
 
         Returns the current token as Authorization header. This method is
-        synchronous and cannot perform token refresh. The SessionManager
-        should call get_valid_token() before using this provider.
+        synchronous and cannot perform token refresh. Call refresh_token_if_needed()
+        before using this method to ensure the token is fresh.
 
         Returns:
             Authorization header with Bearer token

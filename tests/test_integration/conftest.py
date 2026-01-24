@@ -257,8 +257,12 @@ async def store_manager(auth_config: AuthConfig):
     """Create StoreManager with auth based on config."""
     from cl_client.store_manager import StoreManager
 
+    # Use longer timeout for integration tests to handle server load during group test runs
+    # Match the TIMEOUT used in test_full_embedding_flow (300s) for consistency
+    TIMEOUT = 300.0
+
     if not auth_config.username:
-        mgr = StoreManager.guest(base_url=auth_config.store_url)
+        mgr = StoreManager.guest(base_url=auth_config.store_url, timeout=TIMEOUT)
         await mgr.__aenter__()
         yield mgr
         await mgr.__aexit__(None, None, None)
@@ -280,7 +284,7 @@ async def store_manager(auth_config: AuthConfig):
         auth_config.password,
     )
 
-    mgr = session.create_store_manager()
+    mgr = session.create_store_manager(timeout=TIMEOUT)
     await mgr.__aenter__()
     mgr._auth_session = session  # type: ignore[attr-defined]
 

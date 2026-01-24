@@ -279,7 +279,11 @@ class SessionManager:
 
         if self.is_authenticated():
             # Create JWT auth provider with SessionManager integration
-            auth_provider = JWTAuthProvider(get_cached_token=self.get_token)
+            # Pass both sync getter (for backward compat) and async getter (for token refresh)
+            auth_provider = JWTAuthProvider(
+                get_cached_token=self.get_token,
+                get_valid_token_async=self.get_valid_token
+            )
         else:
             # Guest mode - no authentication
             auth_provider = NoAuthProvider()
@@ -291,11 +295,14 @@ class SessionManager:
             auth_provider=auth_provider,
         )
 
-    def create_store_manager(self) -> "StoreManager":
+    def create_store_manager(self, timeout: float = 30.0) -> "StoreManager":
         """Create StoreManager with authentication from this session.
 
         Creates a StoreManager pre-configured with authentication from this
         SessionManager. Requires prior authentication via login().
+
+        Args:
+            timeout: Request timeout in seconds (default: 30.0)
 
         Returns:
             Pre-configured StoreManager instance
@@ -333,7 +340,9 @@ class SessionManager:
         return StoreManager.authenticated(
             config=self._config,
             get_cached_token=self.get_token,
+            get_valid_token_async=self.get_valid_token,
             base_url=self._config.store_url,
+            timeout=timeout,
         )
 
     # ========================================================================

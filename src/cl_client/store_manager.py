@@ -6,7 +6,7 @@ with consistent error handling via StoreOperationResult wrapper.
 Matches the Dart SDK StoreManager pattern.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import cast
 
@@ -92,7 +92,7 @@ class StoreManager:
         return self._store_client
 
     @classmethod
-    def guest(cls, base_url: str = "http://localhost:8001") -> "StoreManager":
+    def guest(cls, base_url: str = "http://localhost:8001", timeout: float = 30.0) -> "StoreManager":
         """Create StoreManager in guest mode (no authentication).
 
         Guest mode allows read operations if read_auth is disabled on the server.
@@ -100,31 +100,40 @@ class StoreManager:
 
         Args:
             base_url: Store service base URL
+            timeout: Request timeout in seconds (default: 30.0)
 
         Returns:
             StoreManager instance configured for guest access
         """
-        return cls(StoreClient(base_url=base_url))
+        return cls(StoreClient(base_url=base_url, timeout=timeout))
 
     @classmethod
     def authenticated(
         cls,
         config: ServerConfig,
         get_cached_token: Callable[[], str] | None = None,
+        get_valid_token_async: Callable[[], Awaitable[str]] | None = None,
         base_url: str | None = None,
+        timeout: float = 30.0,
     ) -> "StoreManager":
         """Create StoreManager with authentication from SessionManager.
 
         Args:
             session_manager: Authenticated SessionManager instance
             base_url: Optional store service URL (defaults to session's store_url)
+            get_cached_token: Synchronous token getter
+            get_valid_token_async: Async token getter with auto-refresh
+            timeout: Request timeout in seconds (default: 30.0)
 
         Returns:
             StoreManager instance configured with authentication
         """
         url = base_url or config.store_url
-        auth_provider = JWTAuthProvider(get_cached_token=get_cached_token)
-        return cls(StoreClient(base_url=url, auth_provider=auth_provider))
+        auth_provider = JWTAuthProvider(
+            get_cached_token=get_cached_token,
+            get_valid_token_async=get_valid_token_async
+        )
+        return cls(StoreClient(base_url=url, auth_provider=auth_provider, timeout=timeout))
 
     async def __aenter__(self) -> "StoreManager":
         """Async context manager entry."""
