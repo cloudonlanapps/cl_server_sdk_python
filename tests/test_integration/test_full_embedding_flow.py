@@ -38,10 +38,11 @@ async def test_full_embedding_flow(
     # Increase timeout for heavy models cold start
     TIMEOUT = 300.0
     
-    created_entities = []
+    # Store pending verifications: (entity, expected_faces, wait_task)
+    pending_verifications = []
 
     try:
-        # 1. Upload all test images
+        # 1. Upload all test images and start monitoring immediately
         for filename, expected_faces in TEST_IMAGES:
             source_path = TEST_VECTORS_DIR / "images" / filename
             assert source_path.exists(), f"Test image not found: {source_path}"
@@ -58,25 +59,25 @@ async def test_full_embedding_flow(
             )
             assert create_result.is_success
             entity = create_result.value_or_throw()
-            created_entities.append((entity, expected_faces))
+            
             logger.info(f"Created entity {entity.id} for {filename}")
+            
+            # Start monitoring waiting immediately to catch early status updates
+            logger.info(f"Starting status monitor for entity {entity.id}...")
+            wait_task = asyncio.create_task(store_manager.wait_for_entity_status(
+                entity_id=entity.id,
+                target_status="completed",
+                timeout=TIMEOUT
+            ))
+            pending_verifications.append((entity, expected_faces, wait_task))
 
-            # Start monitoring/waiting immediately after creation
-            # We can wait for each one legally here or gather them if we wanted parallel processing
-            # For now, sequential per-image verification as per original flow logic (mostly)
-            # but original loop created all then verified all? No, original loop created all then verified all.
-        
         # 2. Verify processing for each entity
-        for entity, expected_faces in created_entities:
+        for entity, expected_faces, wait_task in pending_verifications:
             logger.info(f"Waiting for entity {entity.id} ({entity.label}) to complete processing...")
             
-            # New event-driven wait
+            # Await the pre-created task
             try:
-                status_payload = await store_manager.wait_for_entity_status(
-                    entity_id=entity.id,
-                    target_status="completed",
-                    timeout=TIMEOUT
-                )
+                status_payload = await wait_task
                 logger.info(f"Entity {entity.id} completed with final status: {status_payload}")
             except Exception as e:
                 pytest.fail(f"Entity {entity.id} failed to complete: {e}")
@@ -115,5 +116,9 @@ async def test_full_embedding_flow(
     finally:
         # Cleanup
         logger.info("Cleaning up test entities...")
-        for entity, _ in created_entities:
-            await store_manager.delete_entity(entity.id)
+        # Since we might have crashed before populating all pending_verifications, use whatever we have
+        for entity_data in pending_verifications:
+            # Unpack tuple
+            if len(entity_data) >= 1:
+                entity = entity_data[0]
+                await store_manager.delete_entity(entity.id)

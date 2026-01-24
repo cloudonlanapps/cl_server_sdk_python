@@ -13,6 +13,7 @@ from typing import cast
 import httpx
 import uuid
 import asyncio
+from loguru import logger
 
 from .auth import JWTAuthProvider
 from .config import ComputeClientConfig
@@ -370,16 +371,17 @@ class StoreManager:
             TimeoutError: If timeout reached
             RuntimeError: If failed (and fail_on_error=True)
         """
-        future = asyncio.get_running_loop().create_future()
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
         
         def _callback(payload: EntityStatusPayload):
             if future.done():
                 return
                 
             if payload.status == target_status:
-                future.set_result(payload)
+                loop.call_soon_threadsafe(future.set_result, payload)
             elif fail_on_error and payload.status == "failed":
-                future.set_exception(RuntimeError(f"Entity processing failed: {payload}"))
+                loop.call_soon_threadsafe(future.set_exception, RuntimeError(f"Entity processing failed: {payload}"))
                 
         sub_id = self.monitor_entity(entity_id, _callback)
         
