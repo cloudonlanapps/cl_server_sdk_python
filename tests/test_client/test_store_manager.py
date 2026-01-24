@@ -14,6 +14,7 @@ from cl_client.store_models import (
     EntityVersion,
     StoreConfig,
 )
+from cl_client.types import UNSET
 
 
 @pytest.fixture
@@ -290,9 +291,10 @@ class TestStoreManagerWriteOperations:
         mock_store_client.patch_entity.assert_called_once_with(
             entity_id=123,
             label="Patched Label",
-            description=None,
-            parent_id=None,
-            is_deleted=None,
+            description=UNSET,
+            parent_id=UNSET,
+            is_deleted=UNSET,
+            is_collection=UNSET,
         )
 
     @pytest.mark.asyncio
@@ -309,10 +311,11 @@ class TestStoreManagerWriteOperations:
         assert result.is_success
         mock_store_client.patch_entity.assert_called_once_with(
             entity_id=123,
-            label=None,
-            description=None,
-            parent_id=None,
+            label=UNSET,
+            description=UNSET,
+            parent_id=UNSET,
             is_deleted=True,
+            is_collection=UNSET,
         )
 
     @pytest.mark.asyncio

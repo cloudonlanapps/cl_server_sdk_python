@@ -352,6 +352,7 @@ class StoreManager:
         description: str | None | Unset = UNSET,
         parent_id: int | None | Unset = UNSET,
         is_deleted: bool | None | Unset = UNSET,
+        is_collection: bool | None | Unset = UNSET,
     ) -> StoreOperationResult[Entity]:
         """Partial update of an entity (PATCH).
 
@@ -374,6 +375,7 @@ class StoreManager:
                 description=description,
                 parent_id=parent_id,
                 is_deleted=is_deleted,
+                is_collection=is_collection,
             )
             return StoreOperationResult[Entity](
                 success="Entity patched successfully",

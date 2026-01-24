@@ -96,7 +96,7 @@ class TestJWTAuthProviderInitialization:
 
     def test_jwt_auth_provider_no_arguments(self):
         """Test JWTAuthProvider raises error when no arguments provided."""
-        with pytest.raises(ValueError, match="Either token or session_manager"):
+        with pytest.raises(ValueError, match="Either token or get_cached_token"):
             JWTAuthProvider()
 
     def test_jwt_auth_provider_get_token(self):

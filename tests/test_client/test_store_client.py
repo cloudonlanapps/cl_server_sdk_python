@@ -496,8 +496,8 @@ class TestStoreClientIntelligenceOperations:
         mock_response = Mock()
         mock_response.json.return_value = {
             "results": [
-                {"id": 1, "score": 0.95},
-                {"id": 2, "score": 0.88},
+                {"image_id": 1, "score": 0.95},
+                {"image_id": 2, "score": 0.88},
             ],
             "query_image_id": 123
         }
