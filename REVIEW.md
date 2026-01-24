@@ -11,11 +11,11 @@
 
 **Total Issues Found:** 8
 
-| Category | High | Medium | Low | Total |
-|----------|------|--------|-----|-------|
-| **Source Code** | 2 | 3 | 1 | 6 |
-| **Tests** | 0 | 1 | 1 | 2 |
-| **TOTAL** | **2** | **4** | **2** | **8** |
+| Category        | High  | Medium | Low   | Total |
+| --------------- | ----- | ------ | ----- | ----- |
+| **Source Code** | 2     | 3      | 1     | 6     |
+| **Tests**       | 0     | 1      | 1     | 2     |
+| **TOTAL**       | **2** | **4**  | **2** | **8** |
 
 ---
 
@@ -180,7 +180,7 @@ class SimilarImageResult(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(strict=True)
 
-    image_id: int = Field(..., description="Image ID")
+    entity_id: int = Field(..., description="Entity ID")
     score: float = Field(..., description="Similarity score (0.0 to 1.0)", ge=0.0, le=1.0)
     entity: Any | None = Field(None, description="Entity details if requested")  # ❌ Line 79
 ```
@@ -201,7 +201,7 @@ class SimilarImageResult(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(strict=True)
 
-    image_id: int = Field(..., description="Image ID")
+    entity_id: int = Field(..., description="Entity ID")
     score: float = Field(..., description="Similarity score (0.0 to 1.0)", ge=0.0, le=1.0)
     entity: Entity | None = Field(None, description="Entity details if requested")
 ```
@@ -218,7 +218,7 @@ class SimilarImageResult(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(strict=True, arbitrary_types_allowed=True)
 
-    image_id: int = Field(..., description="Image ID")
+    entity_id: int = Field(..., description="Entity ID")
     score: float = Field(..., description="Similarity score (0.0 to 1.0)", ge=0.0, le=1.0)
     entity: "Entity | None" = Field(None, description="Entity details if requested")  # Forward reference
 ```

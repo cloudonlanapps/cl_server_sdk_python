@@ -496,10 +496,10 @@ class TestStoreClientIntelligenceOperations:
         mock_response = Mock()
         mock_response.json.return_value = {
             "results": [
-                {"image_id": 1, "score": 0.95},
-                {"image_id": 2, "score": 0.88},
+                {"entity_id": 1, "score": 0.95},
+                {"entity_id": 2, "score": 0.88},
             ],
-            "query_image_id": 123
+            "query_entity_id": 123
         }
         mock_response.raise_for_status = Mock()
         mock_httpx_client.get.return_value = mock_response
@@ -508,7 +508,7 @@ class TestStoreClientIntelligenceOperations:
 
         assert isinstance(result, SimilarImagesResponse)
         assert len(result.results) == 2
-        assert result.query_image_id == 123
+        assert result.query_entity_id == 123
         
         call_args = mock_httpx_client.get.call_args
         assert "intelligence/entities/123/similar" in call_args[0][0]

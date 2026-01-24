@@ -94,7 +94,7 @@ async def test_intelligence_features(
         results = sim_images.value_or_throw().results
         assert len(results) > 0
         # Check if our entity is in results (likely with score ~1.0)
-        assert any(r.image_id == entity.id for r in results), "Self not found in similar images"
+        assert any(r.entity_id == entity.id for r in results), "Self not found in similar images"
 
         # 3. Test Face Similarity Search
         logger.info("Testing face similarity search...")
