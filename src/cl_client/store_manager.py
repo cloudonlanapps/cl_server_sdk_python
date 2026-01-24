@@ -29,7 +29,6 @@ from .store_models import (
 )
 from .intelligence_models import (
     EntityJobResponse,
-    FaceMatchResult,
     FaceResponse,
     KnownPersonResponse,
     SimilarFacesResponse,
@@ -838,26 +837,7 @@ class StoreManager:
         except Exception as e:
             return StoreOperationResult[SimilarFacesResponse](error=f"Unexpected error: {str(e)}")
 
-    async def get_face_matches(self, face_id: int) -> StoreOperationResult[list[FaceMatchResult]]:
-        """Get all match records for a face.
-
-        Args:
-            face_id: Face ID
-
-        Returns:
-            StoreOperationResult with list of FaceMatchResult
-        """
-        try:
-            matches = await self._store_client.get_face_matches(face_id)
-            return StoreOperationResult[list[FaceMatchResult]](
-                success="Face matches retrieved successfully",
-                data=matches,
-            )
-        except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[list[FaceMatchResult]], self._handle_error(e))
-        except Exception as e:
-            return StoreOperationResult[list[FaceMatchResult]](error=f"Unexpected error: {str(e)}")
-
+    
     async def update_known_person_name(
         self,
         person_id: int,

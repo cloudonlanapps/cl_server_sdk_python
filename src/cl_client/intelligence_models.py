@@ -62,15 +62,6 @@ class KnownPersonResponse(BaseModel):
     face_count: int | None = Field(None, description="Number of faces for this person (optional)")
 
 
-class FaceMatchResult(BaseModel):
-    """Response schema for face match."""
-    id: int = Field(..., description="Match record ID")
-    face_id: int = Field(..., description="Source face ID")
-    matched_face_id: int = Field(..., description="Matched face ID")
-    similarity_score: float = Field(..., description="Similarity score [0.0, 1.0]")
-    created_at: int = Field(..., description="Match timestamp (milliseconds)")
-    matched_face: FaceResponse | None = Field(None, description="Matched face details (optional)")
-
 
 class SimilarImageResult(BaseModel):
     """Result item for similar image search."""

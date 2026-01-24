@@ -23,7 +23,6 @@ from cl_client.store_models import (
 from cl_client.types import UNSET, Unset
 from cl_client.intelligence_models import (
     EntityJobResponse,
-    FaceMatchResult,
     FaceResponse,
     KnownPersonResponse,
     SimilarFacesResponse,
@@ -789,25 +788,6 @@ class StoreClient:
         _ = response.raise_for_status()
         return SimilarFacesResponse.model_validate(response.json())
 
-    async def get_face_matches(self, face_id: int) -> list[FaceMatchResult]:
-        """Get all match records for a face.
-
-        Args:
-            face_id: Face ID
-
-        Returns:
-            List of FaceMatchResult
-        """
-        if not self._client:
-            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
-
-        response = await self._client.get(
-            f"{self._base_url}/intelligence/faces/{face_id}/matches",
-            headers=await self._get_headers(),
-        )
-        _ = response.raise_for_status()
-        adapter = TypeAdapter(list[FaceMatchResult])
-        return adapter.validate_python(response.json())
 
     async def update_known_person_name(
         self,

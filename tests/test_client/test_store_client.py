@@ -12,7 +12,6 @@ from cl_client.intelligence_models import (
     FaceResponse,
     SimilarImagesResponse,
     SimilarFacesResponse,
-    FaceMatchResult,
     KnownPersonResponse,
 )
 from cl_client.types import UNSET
@@ -535,30 +534,7 @@ class TestStoreClientIntelligenceOperations:
         call_args = mock_httpx_client.get.call_args
         assert "intelligence/faces/456/similar" in call_args[0][0]
 
-    @pytest.mark.asyncio
-    async def test_get_face_matches(self, store_client, mock_httpx_client):
-        """Test getting face matches."""
-        mock_response = Mock()
-        mock_response.json.return_value = [
-            {
-                "id": 1,
-                "face_id": 100,
-                "matched_face_id": 200,
-                "similarity_score": 0.95,
-                "created_at": 1234567890
-            }
-        ]
-        mock_response.raise_for_status = Mock()
-        mock_httpx_client.get.return_value = mock_response
-
-        result = await store_client.get_face_matches(face_id=100)
-
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], FaceMatchResult)
-        
-        call_args = mock_httpx_client.get.call_args
-        assert "intelligence/faces/100/matches" in call_args[0][0]
+    
 
     @pytest.mark.asyncio
     async def test_update_known_person_name(self, store_client, mock_httpx_client):
