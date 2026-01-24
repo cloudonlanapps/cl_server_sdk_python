@@ -515,6 +515,7 @@ uv run basedpyright
 ## Documentation
 
 - **[INTERNALS.md](./INTERNALS.md)** - Developer documentation, architecture, contributing guide
+- **[REVIEW.md](./REVIEW.md)** - Comprehensive code review with actionable issues for improvements
 - **[tests/README.md](./tests/README.md)** - Testing guide with fixtures and patterns
 - **[tests/media/MEDIA_SETUP.md](./tests/media/MEDIA_SETUP.md)** - Test media setup instructions
 - **[Architecture Overview](../../docs/ARCHITECTURE.md)** - System-wide architecture and inter-service communication

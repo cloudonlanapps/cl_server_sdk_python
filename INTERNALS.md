@@ -752,6 +752,56 @@ await client.download_job_files(
 
 ---
 
+## Testing Strategy
+
+Tests are organized into unit tests and integration tests:
+
+**Unit Tests** (`tests/test_client/`):
+- `test_auth.py` - Auth provider tests (NoAuthProvider, JWTAuthProvider, token refresh)
+- `test_auth_models.py` - Pydantic model validation for auth requests/responses
+- `test_auth_client.py` - AuthClient low-level API tests (login, user CRUD)
+- `test_server_config.py` - ServerConfig URL configuration tests
+- `test_session_manager.py` - SessionManager high-level auth workflow tests
+- `test_compute_client.py` - ComputeClient unit tests with mocked dependencies
+- `test_config.py` - Configuration loading and validation
+- `test_models.py` - Pydantic model tests for compute API
+- `test_mqtt_monitor.py` - MQTT monitoring with mocked broker
+- `test_plugins.py` - Plugin unit tests (74 tests across 9 plugins)
+
+**Integration Tests** (`tests/test_integration/`):
+- `test_auth_errors_integration.py` - Auth error scenarios (401, 403)
+- `test_user_management_integration.py` - User CRUD with live auth service
+- `test_clip_embedding.py` - CLIP plugin with live compute service
+- `test_dino_embedding.py` - DINO plugin integration
+- `test_exif.py` - EXIF extraction integration
+- `test_face_detection.py` - Face detection integration
+- `test_face_embedding.py` - Face embedding integration
+- `test_hash.py` - Perceptual hashing integration
+- `test_hls_streaming.py` - HLS manifest generation integration
+- `test_image_conversion.py` - Image format conversion integration
+- `test_media_thumbnail.py` - Thumbnail generation integration
+
+All integration tests are parametrized to run in both no-auth and JWT modes. Tests use httpx.AsyncClient for API calls and aiomqtt for MQTT monitoring.
+
+**Test Tools:**
+- pytest with async support (`pytest-asyncio`)
+- httpx for async HTTP testing
+- aiomqtt for MQTT client testing
+- Pydantic for request/response validation
+- Coverage tracking with 90% minimum requirement
+
+---
+
+## Documentation
+
+- **[README.md](./README.md)** - User-facing documentation with quick start, authentication, API reference
+- **[REVIEW.md](./REVIEW.md)** - Comprehensive code review with actionable issues for improvements
+- **[INTERNALS.md](./INTERNALS.md)** - This file - developer documentation and architecture
+- **[tests/README.md](./tests/README.md)** - Comprehensive testing guide with fixtures and patterns
+- **[tests/QUICK.md](./tests/QUICK.md)** - Quick test command reference
+
+---
+
 ## Testing Guide
 
 See [tests/README.md](./tests/README.md) for detailed testing instructions.

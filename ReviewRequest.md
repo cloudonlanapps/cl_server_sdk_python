@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document captures the comprehensive review requirements for the CL Client Python SDK (cl_client package). The review aims to ensure code quality, documentation accuracy, proper exception handling, and adherence to pyright type checking standards.
+This document captures the comprehensive review requirements for the CL Client Python SDK (cl_client package). The review aims to ensure code quality, documentation accuracy, proper exception handling, and adherence to basedpyright type checking standards.
 
 ---
 
@@ -62,7 +62,7 @@ This document captures the comprehensive review requirements for the CL Client P
   - Document plugin architecture and base classes
   - Explain session management and authentication flow
   - Document MQTT monitoring integration
-  - Add pyright to Code Quality commands
+  - Add basedpyright to Code Quality commands
   - Update Testing Strategy with actual test file list
 
 ---
@@ -98,21 +98,21 @@ This document captures the comprehensive review requirements for the CL Client P
 
 ## Critical Compliance Requirements
 
-### 4. pyright Compliance
+### 4. basedpyright Compliance
 
 **Requirement:**
-> "We must have 0 error 0 warning with pyright. Review the items in REVIEW.md, remove those against pyright."
+> "We must have 0 error 0 warning with basedpyright. Review the items in REVIEW.md, remove those against basedpyright."
 
 **Specifications:**
-- **Zero Tolerance:** Must have 0 errors and 0 warnings with pyright
-- **No Workarounds:** Do NOT suggest using `# pyright: ignore` comments
+- **Zero Tolerance:** Must have 0 errors and 0 warnings with basedpyright
+- **No Workarounds:** Do NOT suggest using `# pyright: ignore` or `# type: ignore` comments
 - **No Type Annotations Issues:** Remove any issues suggesting type annotation workarounds
 - **Clean Code:** All type issues must be properly fixed, not suppressed
 
 **Actions Required:**
 - Review all REVIEW.md issues
 - Remove any issues that suggest:
-  - Using `# pyright: ignore` or similar suppressions
+  - Using `# pyright: ignore`, `# type: ignore`, or similar suppressions
   - Adding type ignore comments
   - Working around type checker issues
   - Type stubs or type checking workarounds that don't achieve 0 errors/warnings
@@ -245,7 +245,7 @@ This document captures the comprehensive review requirements for the CL Client P
   4. Performance issues (async operations, connection pooling)
   5. Security concerns (auth token handling, secure connections)
   6. Documentation completeness (critical for SDK!)
-  7. Type annotation compliance (pyright 0/0)
+  7. Type annotation compliance (basedpyright 0/0)
   8. SDK usability (clear APIs, good defaults)
 
 ### Test Code Review
@@ -392,7 +392,7 @@ Each issue in REVIEW.md must include:
 - [ ] INTERNALS.md updated with package structure
 - [ ] tests/README.md updated with requirements and troubleshooting
 - [ ] tests/QUICK.md expanded with common scenarios
-- [ ] pyright compliance verified (no conflicting issues)
+- [ ] basedpyright compliance verified (no conflicting issues)
 - [ ] Exception patterns analyzed (SDK-specific)
 - [ ] Exception messages reviewed for consistency
 - [ ] Custom exception opportunities identified (SDK context)
@@ -419,7 +419,7 @@ Each issue in REVIEW.md must include:
 
 ## Notes
 
-1. **pyright Compliance:** All recommendations in REVIEW.md must be compatible with pyright's 0 errors/0 warnings requirement.
+1. **basedpyright Compliance:** All recommendations in REVIEW.md must be compatible with basedpyright's 0 errors/0 warnings requirement.
 
 2. **Template Adherence:** All documentation updates must follow templates in `../../docs/templates/`.
 

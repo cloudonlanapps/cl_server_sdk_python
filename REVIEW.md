@@ -3,7 +3,7 @@
 **Package:** `/Users/anandasarangaram/Work/cl_server/sdks/pysdk`
 **Review Date:** 2026-01-23
 **Total Lines of Code:** ~4,380 (source) + ~39 test files
-**Type Checker:** pyright (pyrightconfig.json)
+**Type Checker:** basedpyright (pyrightconfig.json)
 
 ---
 
@@ -162,14 +162,14 @@ Replace `except Exception` with specific catches:
 ### HIGH-002: Type Safety Violation - Any Type in Intelligence Models
 
 **Category:** Source Code / Type Safety
-**Severity:** HIGH (pyright compliance issue)
+**Severity:** HIGH (basedpyright compliance issue)
 **Impact:** Breaks type safety guarantees, makes code less maintainable
 
 **Files Affected:**
 - `/Users/anandasarangaram/Work/cl_server/sdks/pysdk/src/cl_client/intelligence_models.py` (Line 79)
 
 **Description:**
-`SimilarImageResult` model uses `Any` type for the `entity` field, which violates pyright's strict type checking and reduces type safety for SDK users.
+`SimilarImageResult` model uses `Any` type for the `entity` field, which violates basedpyright's strict type checking and reduces type safety for SDK users.
 
 **Current Code:**
 ```python
@@ -190,7 +190,7 @@ class SimilarImageResult(BaseModel):
 - SDK users don't know what type `entity` actually is
 - Can't get IDE autocompletion for entity fields
 - Makes refactoring dangerous
-- Violates pyright 0 errors/warnings requirement
+- Violates basedpyright 0 errors/warnings requirement
 
 **Fix Required:**
 ```python
@@ -227,7 +227,7 @@ class SimilarImageResult(BaseModel):
 ```markdown
 **Title:** [HIGH] Replace Any type with proper Entity type in intelligence_models.py
 
-**Labels:** bug, high, type-safety, pyright
+**Labels:** bug, high, type-safety, basedpyright
 
 **Description:**
 `SimilarImageResult.entity` field uses `Any` type instead of proper `Entity` type, violating type safety.
@@ -236,7 +236,7 @@ class SimilarImageResult(BaseModel):
 - Breaks type safety guarantees
 - No IDE autocompletion
 - Can't detect refactoring issues
-- Violates pyright compliance
+- Violates basedpyright compliance
 
 **Files:**
 - src/cl_client/intelligence_models.py (line 79)
@@ -247,7 +247,7 @@ Replace `Any` with `Entity` type from store_models. Use TYPE_CHECKING import if 
 **Acceptance Criteria:**
 - [ ] No `Any` types in model fields
 - [ ] proper type for entity field
-- [ ] pyright passes with 0 errors
+- [ ] basedpyright passes with 0 errors
 - [ ] IDE provides proper autocompletion
 ```
 
@@ -385,7 +385,7 @@ Rename `updateMsg` to `update_msg`.
 
 **Category:** Source Code / Type Safety
 **Severity:** MEDIUM (acceptable if needed, but worth reviewing)
-**Impact:** Suppresses pyright checks, reduces type safety
+**Impact:** Suppresses basedpyright checks, reduces type safety
 
 **Files Affected:**
 - `/Users/anandasarangaram/Work/cl_server/sdks/pysdk/src/cl_client/compute_client.py` (multiple lines)
@@ -808,7 +808,7 @@ class WorkerUnavailableError(ComputeClientError):
 
 ---
 
-## pyright Compliance Status
+## basedpyright Compliance Status
 
 **Current Status:** 24 type ignore comments exist (MEDIUM-003)
 
