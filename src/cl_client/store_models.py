@@ -11,6 +11,7 @@ This module contains Pydantic models for the store service, including:
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+from .intelligence_models import EntityIntelligenceData
 
 
 class Entity(BaseModel):
@@ -59,10 +60,17 @@ class Entity(BaseModel):
         default=None,
         description="True if any ancestor in the parent chain is soft-deleted",
     )
-    intelligence_status: str | None = Field(
+    intelligence_data: EntityIntelligenceData | None = Field(
         default=None,
-        description="Status of image intelligence processing (queued, processing, completed, failed)",
+        description="Denormalized intelligence data (JSON field)",
     )
+
+    @property
+    def intelligence_status(self) -> str | None:
+        """Compatibility property for overall intelligence status."""
+        if self.intelligence_data:
+            return self.intelligence_data.overall_status
+        return None
 
     @property
     def added_date_datetime(self) -> datetime | None:

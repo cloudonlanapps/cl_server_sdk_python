@@ -3,7 +3,6 @@
 Mirrors server-side schemas from store.m_insight.intelligence.schemas.
 """
 
-from typing import Any
 from pydantic import BaseModel, Field
 
 
@@ -40,17 +39,39 @@ class FaceResponse(BaseModel):
     known_person_id: int | None = Field(None, description="Known person ID (face recognition)")
 
 
-class EntityJobResponse(BaseModel):
-    """Response schema for entity job status."""
-    id: int = Field(..., description="Job record ID")
-    entity_id: int = Field(..., description="Entity ID")
+class JobInfo(BaseModel):
+    """Job tracking information."""
     job_id: str = Field(..., description="Compute service job ID")
-    task_type: str = Field(..., description="Task type (face_detection or clip_embedding)")
+    task_type: str = Field(..., description="Task type (face_detection, clip_embedding, dino_embedding)")
     status: str = Field(..., description="Job status (queued, in_progress, completed, failed)")
-    created_at: int = Field(..., description="Creation timestamp (milliseconds)")
-    updated_at: int = Field(..., description="Last update timestamp (milliseconds)")
+    started_at: int = Field(..., description="Job start timestamp (milliseconds)")
     completed_at: int | None = Field(None, description="Completion timestamp (milliseconds)")
     error_message: str | None = Field(None, description="Error message if failed")
+
+# Alias for backward compatibility
+EntityJobResponse = JobInfo
+
+
+class InferenceStatus(BaseModel):
+    """Fine-grained inference status."""
+    face_detection: str = "pending"
+    clip_embedding: str = "pending"
+    dino_embedding: str = "pending"
+    face_embeddings: list[str] | None = None
+
+
+class EntityIntelligenceData(BaseModel):
+    """Denormalized intelligence data (JSON field)."""
+    overall_status: str = Field("queued", description="Overall status (queued, processing, completed, failed)")
+    last_processed_md5: str | None = None
+    last_processed_version: int | None = None
+    face_count: int | None = None
+    active_processing_md5: str | None = None
+    active_jobs: list[JobInfo] = Field(default_factory=list)
+    job_history: list[JobInfo] = Field(default_factory=list)
+    inference_status: InferenceStatus = Field(default_factory=InferenceStatus)
+    last_updated: int = Field(..., description="Last update timestamp (milliseconds)")
+    error_message: str | None = None
 
 
 class KnownPersonResponse(BaseModel):
@@ -61,32 +82,6 @@ class KnownPersonResponse(BaseModel):
     updated_at: int = Field(..., description="Last update timestamp (milliseconds)")
     face_count: int | None = Field(None, description="Number of faces for this person (optional)")
 
-
-
-class SimilarImageResult(BaseModel):
-    """Result item for similar image search."""
-    entity_id: int = Field(..., description="Entity ID")
-    score: float = Field(..., description="Similarity score [0.0, 1.0]")
-    entity: Any | None = Field(None, description="Entity details if requested")
-
-
-class SimilarImagesResponse(BaseModel):
-    """Response for similar image search."""
-    results: list[SimilarImageResult] = Field(..., description="List of similar images")
-    query_entity_id: int = Field(..., description="ID of the query image")
-
-
-class SimilarFaceResult(BaseModel):
-    """Result item for similar face search."""
-    face_id: int = Field(..., description="Face ID")
-    score: float = Field(..., description="Similarity score [0.0, 1.0]")
-    face: FaceResponse | None = Field(None, description="Face details if available")
-
-
-class SimilarFacesResponse(BaseModel):
-    """Response for similar face search."""
-    results: list[SimilarFaceResult] = Field(..., description="List of similar faces")
-    query_face_id: int = Field(..., description="ID of the query face")
 
 
 class UpdatePersonNameRequest(BaseModel):

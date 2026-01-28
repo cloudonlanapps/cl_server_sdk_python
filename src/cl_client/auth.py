@@ -24,6 +24,14 @@ class AuthProvider(ABC):
         """
         pass
 
+    async def refresh_token_if_needed(self) -> None:
+        """Refresh token if needed (async).
+        
+        Default implementation does nothing. Providers that support refresh
+        should override this method.
+        """
+        pass
+
 
 class NoAuthProvider(AuthProvider):
     """No authentication (Phase 1).
@@ -39,6 +47,11 @@ class NoAuthProvider(AuthProvider):
             Empty dict (no authentication)
         """
         return {}
+
+    @override
+    async def refresh_token_if_needed(self) -> None:
+        """No-op for no-auth provider."""
+        pass
 
 
 class JWTAuthProvider(AuthProvider):
@@ -195,6 +208,7 @@ class JWTAuthProvider(AuthProvider):
 
         raise ValueError("No token available")
 
+    @override
     async def refresh_token_if_needed(self) -> None:
         """Refresh token if needed using async getter.
 
@@ -207,7 +221,7 @@ class JWTAuthProvider(AuthProvider):
         if self.get_valid_token_async is not None:
             try:
                 # Get refreshed token from SessionManager (handles refresh + re-login fallback)
-                refreshed_token = await self.get_valid_token_async()
+                _ = await self.get_valid_token_async()
                 # Token will be updated in SessionManager, no need to update here
             except Exception:
                 # SessionManager's get_valid_token should have already handled

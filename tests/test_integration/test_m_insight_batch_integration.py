@@ -84,11 +84,12 @@ async def test_m_insight_batch_upload_and_queue(
         assert list_result.is_success
         
         for item in list_result.data.items:
-            if item.id in pending_ids and item.intelligence_status == "queued":
+            # We accept any state that indicates MInsight has at least acknowledged/picked up the image
+            if item.id in pending_ids and item.intelligence_status in ["queued", "processing", "completed"]:
                 pending_ids.remove(item.id)
         
         if pending_ids:
-            print(f"  {len(pending_ids)} images still pending...")
+            print(f"  {len(pending_ids)} images still not picked up by MInsight...")
             await asyncio.sleep(2)
             
     # Final check

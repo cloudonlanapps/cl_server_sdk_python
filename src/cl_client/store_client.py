@@ -7,7 +7,7 @@ All write operations use multipart/form-data (not JSON).
 from pathlib import Path
 
 import httpx
-from typing import Any, cast
+from typing import cast
 
 from pydantic import TypeAdapter
 
@@ -25,8 +25,6 @@ from cl_client.intelligence_models import (
     EntityJobResponse,
     FaceResponse,
     KnownPersonResponse,
-    SimilarFacesResponse,
-    SimilarImagesResponse,
 )
 
 
@@ -92,8 +90,8 @@ class StoreClient:
         headers: dict[str, str] = {}
         if self.auth_provider:
             # Check if provider supports async token refresh
-            if hasattr(self.auth_provider, "refresh_token_if_needed"):
-                _ = await cast(Any, self.auth_provider).refresh_token_if_needed()
+            # Check if provider supports async token refresh
+            await self.auth_provider.refresh_token_if_needed()
             headers.update(self.auth_provider.get_headers())
         return headers
 
@@ -540,7 +538,7 @@ class StoreClient:
             headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
-        return response.json()
+        return cast(dict[str, object], response.json())
 
     # Intelligence operations
 
@@ -721,72 +719,6 @@ class StoreClient:
         adapter = TypeAdapter(list[FaceResponse])
         return adapter.validate_python(response.json())
 
-    async def search_similar_images(
-        self,
-        entity_id: int,
-        limit: int = 5,
-        score_threshold: float = 0.85,
-        include_details: bool = False,
-    ) -> SimilarImagesResponse:
-        """Find similar images using CLIP embeddings.
-
-        Args:
-            entity_id: Entity ID
-            limit: Maximum number of results
-            score_threshold: Minimum similarity score (0.0 - 1.0)
-            include_details: Whether to include full entity details
-
-        Returns:
-            SimilarImagesResponse object
-        """
-        if not self._client:
-            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
-
-        params = {
-            "limit": limit,
-            "score_threshold": score_threshold,
-            "include_details": str(include_details).lower(),
-        }
-
-        response = await self._client.get(
-            f"{self._base_url}/intelligence/entities/{entity_id}/similar",
-            params=params,
-            headers=await self._get_headers(),
-        )
-        _ = response.raise_for_status()
-        return SimilarImagesResponse.model_validate(response.json())
-
-    async def search_similar_faces(
-        self,
-        face_id: int,
-        limit: int = 5,
-        threshold: float = 0.7,
-    ) -> SimilarFacesResponse:
-        """Find similar faces using face embeddings.
-
-        Args:
-            face_id: Face ID
-            limit: Maximum number of results
-            threshold: Minimum similarity score (0.0 - 1.0)
-
-        Returns:
-            SimilarFacesResponse object
-        """
-        if not self._client:
-            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
-
-        params = {
-            "limit": limit,
-            "threshold": threshold,
-        }
-
-        response = await self._client.get(
-            f"{self._base_url}/intelligence/faces/{face_id}/similar",
-            params=params,
-            headers=await self._get_headers(),
-        )
-        _ = response.raise_for_status()
-        return SimilarFacesResponse.model_validate(response.json())
 
 
     async def update_known_person_name(

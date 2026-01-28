@@ -41,6 +41,7 @@ class ClientProtocol(Protocol):
         job_id: str,
         on_progress: OnJobResponseCallback = None,
         on_complete: OnJobResponseCallback = None,
+        task_type: str = "unknown",
     ) -> str: ...
 
     pass

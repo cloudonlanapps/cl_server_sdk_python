@@ -31,8 +31,6 @@ from .intelligence_models import (
     EntityJobResponse,
     FaceResponse,
     KnownPersonResponse,
-    SimilarFacesResponse,
-    SimilarImagesResponse,
 )
 
 
@@ -772,70 +770,8 @@ class StoreManager:
         except Exception as e:
             return StoreOperationResult[list[FaceResponse]](error=f"Unexpected error: {str(e)}")
 
-    async def search_similar_images(
-        self,
-        entity_id: int,
-        limit: int = 5,
-        score_threshold: float = 0.85,
-        include_details: bool = False,
-    ) -> StoreOperationResult[SimilarImagesResponse]:
-        """Find similar images using CLIP embeddings.
 
-        Args:
-            entity_id: Entity ID
-            limit: Maximum number of results
-            score_threshold: Minimum similarity score (0.0 - 1.0)
-            include_details: Whether to include full entity details
-
-        Returns:
-            StoreOperationResult with SimilarImagesResponse
-        """
-        try:
-            result = await self._store_client.search_similar_images(
-                entity_id=entity_id,
-                limit=limit,
-                score_threshold=score_threshold,
-                include_details=include_details,
-            )
-            return StoreOperationResult[SimilarImagesResponse](
-                success="Similar images retrieved successfully",
-                data=result,
-            )
-        except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[SimilarImagesResponse], self._handle_error(e))
-        except Exception as e:
-            return StoreOperationResult[SimilarImagesResponse](error=f"Unexpected error: {str(e)}")
-
-    async def search_similar_faces(
-        self,
-        face_id: int,
-        limit: int = 5,
-        threshold: float = 0.7,
-    ) -> StoreOperationResult[SimilarFacesResponse]:
-        """Find similar faces using face embeddings.
-
-        Args:
-            face_id: Face ID
-            limit: Maximum number of results
-            threshold: Minimum similarity score (0.0 - 1.0)
-
-        Returns:
-            StoreOperationResult with SimilarFacesResponse
-        """
-        try:
-            result = await self._store_client.search_similar_faces(
-                face_id=face_id,
-                limit=limit,
-                threshold=threshold,
-            )
-            return StoreOperationResult[SimilarFacesResponse](
-                success="Similar faces retrieved successfully",
-                data=result,
-            )
-        except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[SimilarFacesResponse], self._handle_error(e))
-        except Exception as e:
-            return StoreOperationResult[SimilarFacesResponse](error=f"Unexpected error: {str(e)}")
+    
 
     
     async def update_known_person_name(

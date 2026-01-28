@@ -17,7 +17,7 @@ from loguru import logger
 from paho.mqtt.enums import CallbackAPIVersion
 from paho.mqtt.properties import Properties
 from paho.mqtt.reasoncodes import ReasonCode
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .config import ComputeClientConfig
 from .models import (
@@ -38,19 +38,23 @@ class JobEventPayload(BaseModel):
     progress: int | float | None = None
 
 
-class EntityStatusDetails(BaseModel):
-    face_detection: str | None = None
-    face_count: int | None = None
-    clip_embedding: str | None = None
-    dino_embedding: str | None = None
-    face_embeddings: list[str] | None = None
-
-
 class EntityStatusPayload(BaseModel):
-    entity_id: int
-    status: str
-    details: EntityStatusDetails
-    timestamp: int
+    """Payload for entity status broadcast."""
+
+    entity_id: int = Field(..., description="Entity ID")
+    status: str = Field(..., description="Overall status (queued, processing, completed, failed)")
+    timestamp: int = Field(..., description="Timestamp (milliseconds)")
+
+    # Flattened details
+    face_detection: str | None = Field(default=None, description="Status of face detection")
+    face_count: int | None = Field(
+        default=None, description="Number of faces detected (if completed)"
+    )
+    clip_embedding: str | None = Field(default=None, description="Status of CLIP embedding")
+    dino_embedding: str | None = Field(default=None, description="Status of DINO embedding")
+    face_embeddings: list[str] | None = Field(
+        default=None, description="List of face embedding statuses"
+    )
 
 
 class MQTTJobMonitor:

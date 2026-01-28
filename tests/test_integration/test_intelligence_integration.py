@@ -87,33 +87,8 @@ async def test_intelligence_features(
         assert await wait_for_job(store_manager, entity.id, "dino_embedding"), "DINO job failed"
 
         # 2. Test Image Similarity Search
-        logger.info("Testing image similarity search...")
-        # Self-search should return the image itself as top result
-        sim_images = await store_manager.search_similar_images(entity.id, limit=5)
-        assert sim_images.is_success
-        results = sim_images.value_or_throw().results
-        assert len(results) > 0
-        # Check if our entity is in results (likely with score ~1.0)
-        assert any(r.entity_id == entity.id for r in results), "Self not found in similar images"
 
-        # 3. Test Face Similarity Search
-        logger.info("Testing face similarity search...")
-        sim_faces = await store_manager.search_similar_faces(face_id, limit=5)
-        assert sim_faces.is_success
-        f_results = sim_faces.value_or_throw().results
-        assert len(f_results) > 0
-        # Self face might not be returned depending on Qdrant/Server logic often, 
-        # but let's check basic response structure validity
-        assert f_results[0].face_id is not None
-        
-        # 4. Test Face Matches
-        logger.info("Testing face matches...")
-        matches_res = await store_manager.get_face_matches(face_id)
-        assert matches_res.is_success
-        matches = matches_res.value_or_throw()
-        assert isinstance(matches, list)
-        
-        # 5. Test Person Management
+        # 2. Test Person Management
         known_person_id = faces[0].known_person_id
         if known_person_id:
             logger.info("Testing person name update...")

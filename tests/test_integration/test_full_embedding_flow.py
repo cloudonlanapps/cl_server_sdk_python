@@ -27,7 +27,7 @@ TEST_IMAGES = [
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Skipping temporarily as this test is expeected to hang")
+#@pytest.mark.skip(reason="Skipping temporarily as this test is expeected to hang")
 async def test_full_embedding_flow(
     store_manager: StoreManager,
     compute_server_info: dict[str, object],  # Wait for compute to be ready
