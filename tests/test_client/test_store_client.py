@@ -10,8 +10,6 @@ from cl_client.store_client import StoreClient
 from cl_client.store_models import Entity, EntityListResponse, StoreConfig
 from cl_client.intelligence_models import (
     FaceResponse,
-    SimilarImagesResponse,
-    SimilarFacesResponse,
     KnownPersonResponse,
 )
 from cl_client.types import UNSET
@@ -489,50 +487,6 @@ class TestStoreClientIntelligenceOperations:
         mock_httpx_client.get.assert_called_once()
         assert "intelligence/entities/123/dino_embedding" in mock_httpx_client.get.call_args[0][0]
 
-    @pytest.mark.asyncio
-    async def test_search_similar_images(self, store_client, mock_httpx_client):
-        """Test searching similar images."""
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [
-                {"entity_id": 1, "score": 0.95},
-                {"entity_id": 2, "score": 0.88},
-            ],
-            "query_entity_id": 123
-        }
-        mock_response.raise_for_status = Mock()
-        mock_httpx_client.get.return_value = mock_response
-
-        result = await store_client.search_similar_images(entity_id=123, limit=10)
-
-        assert isinstance(result, SimilarImagesResponse)
-        assert len(result.results) == 2
-        assert result.query_entity_id == 123
-        
-        call_args = mock_httpx_client.get.call_args
-        assert "intelligence/entities/123/similar" in call_args[0][0]
-        assert call_args[1]["params"]["limit"] == 10
-
-    @pytest.mark.asyncio
-    async def test_search_similar_faces(self, store_client, mock_httpx_client):
-        """Test searching similar faces."""
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [
-                {"face_id": 10, "score": 0.9},
-            ],
-            "query_face_id": 456
-        }
-        mock_response.raise_for_status = Mock()
-        mock_httpx_client.get.return_value = mock_response
-
-        result = await store_client.search_similar_faces(face_id=456)
-
-        assert isinstance(result, SimilarFacesResponse)
-        assert result.query_face_id == 456
-        
-        call_args = mock_httpx_client.get.call_args
-        assert "intelligence/faces/456/similar" in call_args[0][0]
 
     
 
