@@ -292,6 +292,11 @@ class MQTTJobMonitor:
                         logger.error(
                             f"Error in on_complete callback: {e}", exc_info=True
                         )
+                    finally:
+                        # Auto-unsubscribe after on_complete fires to prevent memory leaks
+                        if _sub_id in self._job_subscriptions:
+                            del self._job_subscriptions[_sub_id]
+                            logger.debug(f"Auto-unsubscribed from job {updateMsg.job_id} after completion")
 
         except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as e:
             logger.warning(f"Invalid job event message: {e}")
