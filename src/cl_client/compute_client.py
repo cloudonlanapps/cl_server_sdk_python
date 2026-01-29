@@ -107,6 +107,14 @@ class ComputeClient(ClientProtocol):
         mqtt_port_final = mqtt_port or config.mqtt_port
         self._mqtt: MQTTJobMonitor = get_mqtt_monitor(broker=mqtt_broker_final, port=mqtt_port_final)
 
+    async def _get_request_headers(self) -> dict[str, str]:
+        """Get fresh authentication headers for a request.
+
+        Ensures token is refreshed if needed before getting headers.
+        """
+        await self.auth.refresh_token_if_needed()
+        return self.auth.get_headers()
+
     async def update_guest_mode(self, guest_mode: bool) -> bool:
         """Update guest mode configuration (admin only).
 
@@ -128,10 +136,11 @@ class ComputeClient(ClientProtocol):
             "guest_mode": str(guest_mode).lower(),
         }
 
+        headers = await self._get_request_headers()
         response = await self._session.put(
             f"{self.base_url}/admin/config/guest-mode",
             data=data,  # Form data, not JSON
-            headers=self.auth.get_headers(),
+            headers=headers,
         )
         _ = response.raise_for_status()
         return True
@@ -146,10 +155,12 @@ class ComputeClient(ClientProtocol):
         data: RequestData | None,
         files: RequestFiles | None,
     ) -> str:
+        headers = await self._get_request_headers()
         response = await self._session.post(  # type: ignore[reportPrivateUsage]
             endpoint,
             files=files,  # type: ignore[arg-type]
             data=data,
+            headers=headers,
         )
         _ = response.raise_for_status()
         job = JobCreatedResponse.model_validate(response.json())
@@ -171,7 +182,8 @@ class ComputeClient(ClientProtocol):
         from .models import JobResponse
 
         endpoint = ComputeClientConfig.ENDPOINT_GET_JOB.format(job_id=job_id)
-        response = await self._session.get(endpoint)
+        headers = await self._get_request_headers()
+        response = await self._session.get(endpoint, headers=headers)
         _ = response.raise_for_status()
 
         return JobResponse.model_validate(response.json())  # type: ignore[arg-type]
@@ -186,7 +198,8 @@ class ComputeClient(ClientProtocol):
             httpx.HTTPStatusError: If request fails
         """
         endpoint = ComputeClientConfig.ENDPOINT_DELETE_JOB.format(job_id=job_id)
-        response = await self._session.delete(endpoint)
+        headers = await self._get_request_headers()
+        response = await self._session.delete(endpoint, headers=headers)
         _ = response.raise_for_status()
 
     async def download_job_file(self, job_id: str, file_path: str, dest: Path) -> None:
@@ -203,7 +216,8 @@ class ComputeClient(ClientProtocol):
         endpoint = ComputeClientConfig.ENDPOINT_GET_JOB_FILE.format(
             job_id=job_id, file_path=file_path
         )
-        response = await self._session.get(endpoint)
+        headers = await self._get_request_headers()
+        response = await self._session.get(endpoint, headers=headers)
         _ = response.raise_for_status()
 
         # Write file content to destination
@@ -225,7 +239,8 @@ class ComputeClient(ClientProtocol):
         from .models import WorkerCapabilitiesResponse
 
         endpoint = ComputeClientConfig.ENDPOINT_CAPABILITIES
-        response = await self._session.get(endpoint)
+        headers = await self._get_request_headers()
+        response = await self._session.get(endpoint, headers=headers)
         _ = response.raise_for_status()
 
         return WorkerCapabilitiesResponse.model_validate(response.json())  # type: ignore[arg-type]

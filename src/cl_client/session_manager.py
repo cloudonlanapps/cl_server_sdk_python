@@ -84,6 +84,7 @@ class SessionManager:
         # Session state
         self._current_token: str | None = None
         self._current_user: UserResponse | None = None
+        self._credentials: tuple[str, str] | None = None
 
     @property
     def _server_config(self) -> ServerConfig:
@@ -126,8 +127,9 @@ class SessionManager:
         """
         token_response = await self._auth_client.login(username, password)
 
-        # Store token for this session
+        # Store token and credentials for this session
         self._current_token = token_response.access_token
+        self._credentials = (username, password)
 
         # Fetch and cache user info
         self._current_user = await self._auth_client.get_current_user(self._current_token)
@@ -146,6 +148,7 @@ class SessionManager:
         """
         self._current_token = None
         self._current_user = None
+        self._credentials = None
 
     def is_authenticated(self) -> bool:
         """Check if user is currently authenticated.
@@ -235,9 +238,22 @@ class SessionManager:
         # Check if token needs refresh
         provider = JWTAuthProvider(token=self._current_token)
         if provider.should_refresh(self._current_token):
-            # Refresh token
-            token_response = await self._auth_client.refresh_token(self._current_token)
-            self._current_token = token_response.access_token
+            try:
+                # Refresh token
+                token_response = await self._auth_client.refresh_token(self._current_token)
+                self._current_token = token_response.access_token
+            except Exception:
+                # If refresh fails and we have credentials, try re-login
+                if self._credentials:
+                    username, password = self._credentials
+                    try:
+                        token_response = await self._auth_client.login(username, password)
+                        self._current_token = token_response.access_token
+                        return self._current_token
+                    except Exception:
+                        # If re-login also fails, raise original or new exception
+                        raise
+                raise
 
         return self._current_token
 
