@@ -346,46 +346,96 @@ class StoreManager:
             del self._mqtt_subscriptions[subscription_id]
 
     async def wait_for_entity_status(
-        self, 
-        entity_id: int, 
-        target_status: str = "completed", 
+        self,
+        entity_id: int,
+        target_status: str = "completed",
         timeout: float = 60.0,
         fail_on_error: bool = True
     ) -> EntityStatusPayload:
         """Wait for entity to reach specific status.
-        
+
         Args:
             entity_id: Entity ID
             target_status: Status to wait for (default: "completed")
             timeout: Max wait time in seconds
             fail_on_error: If True, raises exception if status becomes "failed"
-            
+
         Returns:
             Final status payload
-            
+
         Raises:
             TimeoutError: If timeout reached
             RuntimeError: If failed (and fail_on_error=True)
         """
+        from loguru import logger
+
         loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        
+        future: asyncio.Future[EntityStatusPayload] = loop.create_future()
+        callback_executed = False
+        callback_lock = asyncio.Lock()
+
         def _callback(payload: EntityStatusPayload):
-            if future.done():
+            """Callback that ensures the future is only set once (prevents InvalidStateError)."""
+            nonlocal callback_executed
+
+            # Check if already executed without acquiring lock (fast path)
+            if callback_executed or future.done():
                 return
-                
+
             if payload.status == target_status:
-                _ = loop.call_soon_threadsafe(future.set_result, payload)
+                logger.debug(f"Entity {entity_id} reached target status {target_status} via MQTT")
+                # Use call_soon_threadsafe since MQTT callback runs in a different thread
+                def _set_result():
+                    nonlocal callback_executed
+                    if not callback_executed and not future.done():
+                        callback_executed = True
+                        future.set_result(payload)
+                loop.call_soon_threadsafe(_set_result)
             elif fail_on_error and payload.status == "failed":
-                _ = loop.call_soon_threadsafe(future.set_exception, RuntimeError(f"Entity processing failed: {payload}"))
-                
+                def _set_exception():
+                    nonlocal callback_executed
+                    if not callback_executed and not future.done():
+                        callback_executed = True
+                        future.set_exception(RuntimeError(f"Entity processing failed: {payload}"))
+                loop.call_soon_threadsafe(_set_exception)
+
+        # Subscribe to MQTT FIRST, before checking status
+        # This ensures we won't miss messages that arrive after our status check
         sub_id = self.monitor_entity(entity_id, _callback)
-        
+
         try:
-            return await cast(Awaitable[EntityStatusPayload], asyncio.wait_for(future, timeout=timeout))
+            # Give MQTT subscription a moment to be established
+            await asyncio.sleep(0.1)
+
+            # Now check current status - if already at target, manually trigger callback
+            # This catches entities that completed before/during MQTT subscription
+            entity_result = await self.read_entity(entity_id)
+            if entity_result.is_success:
+                entity = entity_result.value_or_throw()
+                current_status = entity.intelligence_status
+
+                if current_status in (target_status, "failed"):
+                    logger.debug(f"Entity {entity_id} already at status {current_status}, manually triggering callback")
+                    # Create a payload and manually call the callback
+                    payload = EntityStatusPayload(
+                        entity_id=entity_id,
+                        status=current_status,
+                        timestamp=entity.intelligence_data.last_updated if entity.intelligence_data else 0,
+                        face_detection=entity.intelligence_data.inference_status.face_detection if entity.intelligence_data else None,
+                        face_count=entity.intelligence_data.face_count if entity.intelligence_data else None,
+                        clip_embedding=entity.intelligence_data.inference_status.clip_embedding if entity.intelligence_data else None,
+                        dino_embedding=entity.intelligence_data.inference_status.dino_embedding if entity.intelligence_data else None,
+                        face_embeddings=entity.intelligence_data.inference_status.face_embeddings if entity.intelligence_data else None,
+                    )
+                    _callback(payload)
+
+            # Wait for the callback to set the future (either from MQTT or manual trigger)
+            return await asyncio.wait_for(future, timeout=timeout)
+
         except asyncio.TimeoutError:
             raise TimeoutError(f"Timeout waiting for entity {entity_id} to reach {target_status}")
         finally:
+            # Always clean up subscription
             self.stop_monitoring(sub_id)
 
     # Write operations
@@ -515,33 +565,24 @@ class StoreManager:
     async def delete_entity(
         self,
         entity_id: int,
+        force: bool = True,
     ) -> StoreOperationResult[None]:
         """Hard delete an entity (permanent removal).
 
-        Automatically soft-deletes the entity first as required by the server.
+        Automatically soft-deletes the entity first using force=True by default.
 
         Requires media_store_write permission (always requires auth).
 
         Args:
             entity_id: Entity ID to delete
+            force: If True (default), automatically soft-delete first if not already soft-deleted
 
         Returns:
             StoreOperationResult with success/error status
         """
         try:
-            # Server requires entity to be soft-deleted before hard deletion
-            # Try to soft-delete first
-            patch_result = await self.patch_entity(entity_id=entity_id, is_deleted=True)
-            
-            # If soft-delete failed, check why
-            # If it failed because it's not found, proceed to delete (will return 404)
-            # If it failed for other reasons, return error
-            if patch_result.is_error:
-                error_msg = str(patch_result.error)
-                if "Not Found" not in error_msg and "404" not in error_msg:
-                     return StoreOperationResult[None](error=error_msg)
-
-            await self._store_client.delete_entity(entity_id=entity_id)
+            # Use force=True to automatically handle soft-deletion
+            await self._store_client.delete_entity(entity_id=entity_id, force=force)
             return StoreOperationResult[None](
                 success="Entity deleted successfully",
                 data=None,

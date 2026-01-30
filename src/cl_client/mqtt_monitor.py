@@ -97,10 +97,10 @@ class MQTTJobMonitor:
             []
         )
 
-        # Entity subscriptions: subscription_id -> (entity_id, callback)
+        # Entity subscriptions: subscription_id -> (entity_id, callback, topic)
         self._entity_subscriptions: dict[
             str,
-            tuple[int, Callable[[EntityStatusPayload], None] | Callable[[EntityStatusPayload], Awaitable[None]]],
+            tuple[int, Callable[[EntityStatusPayload], None] | Callable[[EntityStatusPayload], Awaitable[None]], str],
         ] = {}
 
         # Connection event for blocking until connected
@@ -311,10 +311,10 @@ class MQTTJobMonitor:
             entity_id = payload.entity_id
 
             # Dispatch to subscribers
-            for _sub_id, (sub_entity_id, callback) in list(self._entity_subscriptions.items()):
+            for _sub_id, (sub_entity_id, callback, _topic) in list(self._entity_subscriptions.items()):
                 if sub_entity_id != entity_id:
                     continue
-                
+
                 try:
                     import inspect
                     if inspect.iscoroutinefunction(callback):
@@ -423,26 +423,31 @@ class MQTTJobMonitor:
             Subscription ID
         """
         subscription_id = str(uuid.uuid4())
-        
+
         # Capture event loop
         if self._event_loop is None:
             try:
                 self._event_loop = asyncio.get_running_loop()
             except RuntimeError:
                 pass
-        
-        self._entity_subscriptions[subscription_id] = (entity_id, on_update)
-        
+
         # Subscribe to MQTT topic
         topic = f"mInsight/{store_port}/entity_item_status/{entity_id}"
         _ = self._client.subscribe(topic)
         logger.debug(f"Subscribed to entity status: {topic}")
-        
+
+        # Store subscription with topic for cleanup
+        self._entity_subscriptions[subscription_id] = (entity_id, on_update, topic)
+
         return subscription_id
 
     def unsubscribe_entity_status(self, subscription_id: str) -> None:
         """Unsubscribe from entity status updates."""
         if subscription_id in self._entity_subscriptions:
+            _entity_id, _callback, topic = self._entity_subscriptions[subscription_id]
+            # Unsubscribe from MQTT topic to prevent leaks
+            _ = self._client.unsubscribe(topic)
+            logger.debug(f"Unsubscribed from entity status: {topic}")
             del self._entity_subscriptions[subscription_id]
 
     def unsubscribe(self, subscription_id: str) -> None:

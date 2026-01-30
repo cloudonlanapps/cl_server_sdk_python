@@ -441,11 +441,12 @@ class StoreClient:
         _ = response.raise_for_status()
         return Entity.model_validate(response.json())
 
-    async def delete_entity(self, entity_id: int) -> None:
+    async def delete_entity(self, entity_id: int, force: bool = False) -> None:
         """Hard delete an entity.
 
         Args:
             entity_id: Entity ID
+            force: If True, automatically soft-delete the entity first if not already soft-deleted
 
         Raises:
             httpx.HTTPStatusError: If the request fails
@@ -453,9 +454,11 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
+        params = {"force": str(force).lower()}  # Convert boolean to lowercase string for query param
         response = await self._client.delete(
             f"{self._base_url}/entities/{entity_id}",
             headers=await self._get_headers(),
+            params=params,
         )
         _ = response.raise_for_status()
 
