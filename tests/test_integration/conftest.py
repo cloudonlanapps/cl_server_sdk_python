@@ -299,7 +299,6 @@ async def store_manager(auth_config: AuthConfig):
     async def tracked_create(*args, **kwargs):
         res = await original_create(*args, **kwargs)
         if res.is_success and res.data:
-            from conftest import created_entities
             # Note: Conftest is a bit tricky with imports, using global state might be easier
             # but let's try to find the fixture value if possible, or use a global.
             # Using a global in this module for simplicity as it's a test helper.
@@ -364,6 +363,7 @@ def unique_test_image(test_image: Path, tmp_path: Path) -> Path:
     unique_path = tmp_path / f"unique_{uuid.uuid4().hex}.jpg"
     # Use random offset to ensure uniqueness even if multiple tests call this at once
     create_unique_copy(test_image, unique_path, offset=random.randint(1, 250))
+    
     return unique_path
     
 
@@ -430,7 +430,7 @@ def test_video_720p(media_dir: Path) -> Path:
 # ============================================================================
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 async def cleanup_store_entities(
     request: pytest.FixtureRequest,
     auth_config,  # AuthConfig Pydantic model from parent conftest
@@ -455,6 +455,7 @@ async def cleanup_store_entities(
         username = auth_config.username
         password = auth_config.password
         auth_url = auth_config.auth_url
+        compute_url = auth_config.compute_url
         store_url = auth_config.store_url
 
         from cl_client.store_manager import StoreManager
@@ -476,9 +477,14 @@ async def cleanup_store_entities(
                     # Copy set to avoid modification during iteration
                     ids_to_delete = list(_CREATED_ENTITY_IDS)
                     for entity_id in ids_to_delete:
-                        # Use force=True to handle soft-deletion automatically
-                        _ = await mgr.delete_entity(entity_id, force=True)
+                        try:
+                            # Use force=True to handle soft-deletion automatically
+                            _ = await mgr.delete_entity(entity_id, force=True)
+                        except Exception as e:
+                            logging.warning(f"Failed to delete tracked entity {entity_id}: {e}")
                         _CREATED_ENTITY_IDS.discard(entity_id)
+                    
+                    logging.info("Tracked cleanup complete.")
 
                     # Verify deletion with audit report
                     audit_res = await mgr.get_audit_report()
@@ -502,9 +508,6 @@ async def cleanup_store_entities(
                         if orphaned_ids:
                             logging.warning(f"Entities {orphaned_ids} were deleted but left orphans in audit report!")
 
-                # 2. Try bulk delete as fallback (if admin)
-                # This is still useful if common setup creates entities outside tracked calls
-                await mgr.store_client.delete_all_entities()
 
     except Exception as e:
         # Non-fatal cleanup failure

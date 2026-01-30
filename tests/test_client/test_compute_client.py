@@ -137,7 +137,7 @@ async def test_get_job_success(client: ComputeClient, mock_httpx_client: AsyncMo
 
     # Verify correct endpoint was called
     expected_endpoint = ComputeClientConfig.ENDPOINT_GET_JOB.format(job_id="test-123")
-    _ = cast(Any, mock_httpx_client.get).assert_called_once_with(expected_endpoint)
+    _ = cast(Any, mock_httpx_client.get).assert_called_once_with(expected_endpoint, headers={})
     _ = cast(Any, mock_response.raise_for_status).assert_called_once()
 
 
@@ -167,7 +167,7 @@ async def test_delete_job_success(client: ComputeClient, mock_httpx_client: Asyn
     await client.delete_job("test-123")
 
     expected_endpoint = ComputeClientConfig.ENDPOINT_DELETE_JOB.format(job_id="test-123")
-    _ = cast(Any, mock_httpx_client.delete).assert_called_once_with(expected_endpoint)
+    _ = cast(Any, mock_httpx_client.delete).assert_called_once_with(expected_endpoint, headers={})
     _ = cast(Any, mock_response.raise_for_status).assert_called_once()
 
 
@@ -192,7 +192,7 @@ async def test_download_job_file_success(
     expected_endpoint = ComputeClientConfig.ENDPOINT_GET_JOB_FILE.format(
         job_id="test-123", file_path="output/result.txt"
     )
-    _ = cast(Any, mock_httpx_client.get).assert_called_once_with(expected_endpoint)
+    _ = cast(Any, mock_httpx_client.get).assert_called_once_with(expected_endpoint, headers={})
     _ = cast(Any, mock_response.raise_for_status).assert_called_once()
 
 
@@ -212,7 +212,7 @@ async def test_get_capabilities_success(client: ComputeClient, mock_httpx_client
 
     # Verify correct endpoint was called
     _ = cast(Any, mock_httpx_client.get).assert_called_once_with(
-        ComputeClientConfig.ENDPOINT_CAPABILITIES
+        ComputeClientConfig.ENDPOINT_CAPABILITIES, headers={}
     )
     _ = cast(Any, mock_response.raise_for_status).assert_called_once()
 

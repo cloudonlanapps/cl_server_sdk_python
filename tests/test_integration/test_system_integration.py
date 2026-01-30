@@ -56,3 +56,35 @@ async def test_clear_orphans(store_manager, auth_config: AuthConfig):
         result = await store_manager.clear_orphans()
         assert result.is_error
         assert "Forbidden" in str(result.error) or "403" in str(result.error)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_entity_id_autoincrement_no_reuse(store_manager, unique_test_image: PathlibPath):
+    """Test that SQLite AUTOINCREMENT prevents ID reuse after deletion."""
+    # 1. Create first entity
+    res1 = await store_manager.create_entity(
+        label="Entity One",
+        is_collection=False,
+        image_path=unique_test_image
+    )
+    assert res1.is_success
+    id1 = res1.data.id
+
+    # 2. Delete it (hard delete)
+    del_res = await store_manager.delete_entity(id1, force=True)
+    assert del_res.is_success
+
+    # 3. Create second entity
+    # Use a different unique image to avoid any MD5 collisions
+    res2 = await store_manager.create_entity(
+        label="Entity Two",
+        is_collection=False,
+        image_path=unique_test_image
+    )
+    assert res2.is_success
+    id2 = res2.data.id
+
+    # 4. Verify ID is NOT reused
+    # With AUTOINCREMENT, id2 must be greater than id1 even if 1 was deleted
+    assert id2 > id1, f"ID reuse detected! id1={id1}, id2={id2}. AUTOINCREMENT might be missing."

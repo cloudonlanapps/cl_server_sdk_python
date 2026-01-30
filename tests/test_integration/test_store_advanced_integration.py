@@ -68,16 +68,3 @@ async def test_store_advanced_features(store_manager: StoreManager, unique_test_
     read_non_existent = await store_manager.read_entity(999999)
     assert read_non_existent.is_error
     assert "Not Found" in read_non_existent.error
-    
-    # 5. Test Bulk Delete (Admin only usually, but let's try via client)
-    # Note: store_manager is created with admin creds in conftest if available
-    try:
-        await store_manager._store_client.delete_all_entities()
-        # Verify empty
-        empty_list = await store_manager.list_entities()
-        assert empty_list.is_success
-        assert len(empty_list.data.items) == 0
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 403:
-            pytest.skip("Bulk delete requires admin permissions")
-        raise

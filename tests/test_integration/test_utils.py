@@ -42,15 +42,12 @@ def create_unique_copy(source_path: Path, dest_path: Path, offset: int = 0) -> N
                     else:
                         img.putpixel((x, y), tuple(pixel[:3]))
             
-            # Save to new path with EXIF
-            exif_data = img.getexif()
-            img.save(dest_path, exif=exif_data, quality=95)
+        # Save to new path with EXIF
+        exif_data = img.getexif()
+        img.save(dest_path, exif=exif_data, quality=95)
             
     except Exception as e:
         logger.error(f"Error preparing unique image {source_path}: {e}")
-        # Fallback to simple copy + append if PIL fails (e.g. not an image)
+        # Fallback to simple copy if PIL fails (e.g. not an image)
         import shutil
-        import os
         shutil.copy2(source_path, dest_path)
-        with open(dest_path, "ab") as f:
-            f.write(os.urandom(16))
