@@ -24,6 +24,7 @@ from cl_client.store_models import (
 )
 from cl_client.types import UNSET, Unset
 from cl_client.intelligence_models import (
+    EntityIntelligenceData,
     EntityJobResponse,
     FaceResponse,
     KnownPersonResponse,
@@ -611,6 +612,31 @@ class StoreClient:
         return cast(dict[str, object], response.json())
 
     # Intelligence operations
+
+    async def get_entity_intelligence(self, entity_id: int) -> EntityIntelligenceData | None:
+        """Get intelligence data for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            EntityIntelligenceData if available, None otherwise
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/intelligence/entities/{entity_id}",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        data = response.json()
+        if data is None:
+            return None
+        return EntityIntelligenceData.model_validate(data)
 
     async def get_entity_faces(self, entity_id: int) -> list[FaceResponse]:
         """Get all faces detected in an entity.

@@ -30,6 +30,7 @@ from .store_models import (
     CleanupReport,
 )
 from .intelligence_models import (
+    EntityIntelligenceData,
     EntityJobResponse,
     FaceResponse,
     KnownPersonResponse,
@@ -717,6 +718,28 @@ class StoreManager:
             return StoreOperationResult[dict[str, object]](error=f"Unexpected error: {str(e)}")
 
     # Intelligence operations
+
+    async def get_entity_intelligence(
+        self, entity_id: int
+    ) -> StoreOperationResult[EntityIntelligenceData | None]:
+        """Get intelligence data for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with EntityIntelligenceData or None
+        """
+        try:
+            intelligence = await self._store_client.get_entity_intelligence(entity_id)
+            return StoreOperationResult[EntityIntelligenceData | None](
+                success="Intelligence data retrieved successfully",
+                data=intelligence,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[EntityIntelligenceData | None], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[EntityIntelligenceData | None](error=f"Unexpected error: {str(e)}")
 
     async def get_entity_faces(self, entity_id: int) -> StoreOperationResult[list[FaceResponse]]:
         """Get all faces detected in an entity.

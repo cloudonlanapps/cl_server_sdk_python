@@ -79,15 +79,16 @@ async def test_m_insight_batch_upload_and_queue(
     print(f"Waiting for MInsight to queue images (timeout: {TIMEOUT}s)...")
     
     while pending_ids and (time.time() - start_time < TIMEOUT):
-        # We can poll in batches or one by one. Batch is better.
-        list_result = await store_manager.list_entities(page_size=100)
-        assert list_result.is_success
-        
-        for item in list_result.data.items:
-            # We accept any state that indicates MInsight has at least acknowledged/picked up the image
-            if item.id in pending_ids and item.intelligence_status in ["queued", "processing", "completed"]:
-                pending_ids.remove(item.id)
-        
+        # Check intelligence status for each pending entity
+        for entity_id in list(pending_ids):
+            intel_result = await store_manager.get_entity_intelligence(entity_id)
+
+            if intel_result.is_success and intel_result.data:
+                # We accept any state that indicates MInsight has at least acknowledged/picked up the image
+                status = intel_result.data.overall_status
+                if status in ["queued", "processing", "completed"]:
+                    pending_ids.remove(entity_id)
+
         if pending_ids:
             print(f"  {len(pending_ids)} images still not picked up by MInsight...")
             await asyncio.sleep(2)
@@ -97,10 +98,13 @@ async def test_m_insight_batch_upload_and_queue(
         # Get details for failures
         failed_details = []
         for pid in pending_ids:
-            item_res = await store_manager.read_entity(pid)
-            status = item_res.data.intelligence_status if item_res.is_success else "unknown"
+            intel_res = await store_manager.get_entity_intelligence(pid)
+            if intel_res.is_success and intel_res.data:
+                status = intel_res.data.overall_status
+            else:
+                status = "no intelligence data"
             failed_details.append(f"ID {pid}: status={status}")
-            
+
         pytest.fail(
             f"Timed out waiting for {len(pending_ids)} images to be queued.\n"
             f"Failures: {', '.join(failed_details)}"
