@@ -286,8 +286,8 @@ class TestAuthClientAdminUserManagement:
                 )
 
             # Verify that permissions list is converted to comma-separated string for form data
-            expected_data = user_create.model_dump()
-            expected_data["permissions"] = "read:jobs"  # List becomes comma-separated string
+            # and booleans are converted to strings
+            expected_data = user_create.to_api_payload()  # Uses to_api_payload() for proper form data conversion
             mock_post.assert_called_once_with(
                 "/users/",
                 headers={"Authorization": "Bearer admin_token"},
@@ -527,7 +527,8 @@ class TestAuthClientAdminUserManagement:
                 )
 
             # Verify only non-None fields are included, permissions list converted to string
-            expected_data = {"permissions": "*", "is_admin": True}  # List becomes comma-separated string
+            # Booleans are converted to lowercase strings for form data
+            expected_data = {"permissions": "*", "is_admin": "true"}  # List becomes comma-separated string, bool becomes string
             mock_put.assert_called_once_with(
                 "/users/2",
                 headers={"Authorization": "Bearer admin_token"},

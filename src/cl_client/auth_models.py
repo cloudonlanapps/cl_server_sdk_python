@@ -92,9 +92,25 @@ class UserCreateRequest(BaseModel):
     is_active: bool = Field(True, description="Set account active status")
     permissions: list[str] = Field(default_factory=list, description="Initial permissions")
 
-    def to_api_payload(self) -> dict[str, str | bool]:
-        data = self.model_dump(exclude_none=True)
-        data["permissions"] = ",".join(self.permissions)
+    def to_api_payload(self) -> dict[str, str]:
+        """Convert to form data payload suitable for POST /users/.
+
+        Returns:
+            Dictionary with string values for form data submission.
+            Booleans are converted to lowercase strings ("true"/"false").
+        """
+        data_dict = self.model_dump(exclude_none=True)
+
+        # Convert to string values for form data
+        data: dict[str, str] = {}
+        for key, value in data_dict.items():
+            if key == "permissions":
+                data[key] = ",".join(self.permissions)
+            elif isinstance(value, bool):
+                data[key] = "true" if value else "false"
+            else:
+                data[key] = str(value)
+
         return data
 
 
@@ -117,10 +133,23 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = Field(None, description="Update active status (optional)")
     is_admin: bool | None = Field(None, description="Update admin status (optional)")
 
-    def to_api_payload(self) -> dict[str, str | bool]:
-        data = self.model_dump(exclude_none=True)
+    def to_api_payload(self) -> dict[str, str]:
+        """Convert to form data payload suitable for PUT /users/{user_id}.
 
-        if self.permissions is not None:
-            data["permissions"] = ",".join(self.permissions)
+        Returns:
+            Dictionary with string values for form data submission.
+            Booleans are converted to lowercase strings ("true"/"false").
+        """
+        data_dict = self.model_dump(exclude_none=True)
+
+        # Convert to string values for form data
+        data: dict[str, str] = {}
+        for key, value in data_dict.items():
+            if key == "permissions" and value is not None:
+                data[key] = ",".join(value) if isinstance(value, list) else str(value)
+            elif isinstance(value, bool):
+                data[key] = "true" if value else "false"
+            else:
+                data[key] = str(value)
 
         return data

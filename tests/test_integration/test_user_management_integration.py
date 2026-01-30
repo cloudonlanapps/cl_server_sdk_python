@@ -70,16 +70,31 @@ async def test_create_user_success(auth_config: AuthConfig, is_no_auth: bool):
     )
 
     try:
-        user_create = UserCreateRequest(
-            username="test_new_user",
-            password="password123",
-            is_admin=False,
-            is_active=True,
-            permissions=["read:jobs"],
-        )
-
         if should_succeed(auth_config, operation_type="admin"):
             # Should succeed - admin user
+
+            # Check if test user already exists
+            users = await session._auth_client.list_users(  # type: ignore[attr-defined]
+                token=session.get_token(),
+            )
+            existing_user = next((u for u in users if u.username == "test_new_user"), None)
+
+            if existing_user:
+                # User exists - delete it first for a clean test
+                await session._auth_client.delete_user(  # type: ignore[attr-defined]
+                    token=session.get_token(),
+                    user_id=existing_user.id,
+                )
+
+            # Create user
+            user_create = UserCreateRequest(
+                username="test_new_user",
+                password="password123",
+                is_admin=False,
+                is_active=True,
+                permissions=["read:jobs"],
+            )
+
             user = await session._auth_client.create_user(  # type: ignore[attr-defined]
                 token=session.get_token(),
                 user_create=user_create,
@@ -550,21 +565,40 @@ async def test_delete_user_success(auth_config: AuthConfig, is_no_auth: bool):
     try:
         if should_succeed(auth_config, operation_type="admin"):
             # Should succeed - admin user
-            # Create user to delete
-            user_create = UserCreateRequest(
-                username="test_delete_user",
-                password="password123",
-                is_admin=False,
-                is_active=True,
-                permissions=["read:jobs"],
-            )
 
-            created_user = await session._auth_client.create_user(  # type: ignore[attr-defined]
+            # Check if test user already exists
+            users = await session._auth_client.list_users(  # type: ignore[attr-defined]
                 token=session.get_token(),
-                user_create=user_create,
             )
+            existing_user = next((u for u in users if u.username == "test_delete_user"), None)
 
-            user_id = created_user.id
+            if existing_user:
+                # User exists - verify/update permissions if needed
+                expected_permissions = ["read:jobs"]
+                if existing_user.permissions != expected_permissions:
+                    from cl_client.auth_models import UserUpdateRequest
+                    update = UserUpdateRequest(permissions=expected_permissions)
+                    await session._auth_client.update_user(  # type: ignore[attr-defined]
+                        token=session.get_token(),
+                        user_id=existing_user.id,
+                        user_update=update,
+                    )
+                user_id = existing_user.id
+            else:
+                # User doesn't exist - create it
+                user_create = UserCreateRequest(
+                    username="test_delete_user",
+                    password="password123",
+                    is_admin=False,
+                    is_active=True,
+                    permissions=["read:jobs"],
+                )
+
+                created_user = await session._auth_client.create_user(  # type: ignore[attr-defined]
+                    token=session.get_token(),
+                    user_create=user_create,
+                )
+                user_id = created_user.id
 
             # Delete user
             await session._auth_client.delete_user(  # type: ignore[attr-defined]
@@ -573,11 +607,11 @@ async def test_delete_user_success(auth_config: AuthConfig, is_no_auth: bool):
             )
 
             # Verify user no longer exists
-            users = await session._auth_client.list_users(  # type: ignore[attr-defined]
+            users_after = await session._auth_client.list_users(  # type: ignore[attr-defined]
                 token=session.get_token(),
             )
 
-            deleted_user = next((u for u in users if u.id == user_id), None)
+            deleted_user = next((u for u in users_after if u.id == user_id), None)
             assert deleted_user is None, "User should be deleted"
         else:
             # Should fail - non-admin user
