@@ -480,6 +480,28 @@ async def cleanup_store_entities(
                         _ = await mgr.delete_entity(entity_id, force=True)
                         _CREATED_ENTITY_IDS.discard(entity_id)
 
+                    # Verify deletion with audit report
+                    audit_res = await mgr.get_audit_report()
+                    if audit_res.is_success and audit_res.data:
+                        report = audit_res.data
+                        # Check for remaining Orphans related to our tracked IDs
+                        orphaned_ids = set()
+                        for f in report.orphaned_files:
+                            # Heuristic: file path usually contains entity ID? 
+                            # Actually server OrphanedFaceInfo and OrphanedMqttInfo have entity_id
+                            pass
+                        
+                        for face in report.orphaned_faces:
+                            if face.entity_id in ids_to_delete:
+                                orphaned_ids.add(face.entity_id)
+                        
+                        for mqtt in report.orphaned_mqtt:
+                            if mqtt.entity_id in ids_to_delete:
+                                orphaned_ids.add(mqtt.entity_id)
+                        
+                        if orphaned_ids:
+                            logging.warning(f"Entities {orphaned_ids} were deleted but left orphans in audit report!")
+
                 # 2. Try bulk delete as fallback (if admin)
                 # This is still useful if common setup creates entities outside tracked calls
                 await mgr.store_client.delete_all_entities()
