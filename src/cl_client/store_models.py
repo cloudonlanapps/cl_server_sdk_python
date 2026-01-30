@@ -14,6 +14,49 @@ from pydantic import BaseModel, Field
 from .intelligence_models import EntityIntelligenceData
 
 
+class OrphanedFileInfo(BaseModel):
+    """Information about an orphaned file."""
+    file_path: str
+    file_size: int | None = None
+    last_modified: int | None = None
+
+
+class OrphanedFaceInfo(BaseModel):
+    """Information about an orphaned face record."""
+    face_id: int
+    entity_id: int
+
+
+class OrphanedVectorInfo(BaseModel):
+    """Information about an orphaned vector in Qdrant."""
+    vector_id: str
+    collection_name: str
+
+
+class OrphanedMqttInfo(BaseModel):
+    """Information about an orphaned MQTT retained message."""
+    entity_id: int
+    topic: str
+
+
+class AuditReport(BaseModel):
+    """Comprehensive audit report of data integrity issues."""
+    orphaned_files: list[OrphanedFileInfo] = Field(default_factory=list)
+    orphaned_faces: list[OrphanedFaceInfo] = Field(default_factory=list)
+    orphaned_vectors: list[OrphanedVectorInfo] = Field(default_factory=list)
+    orphaned_mqtt: list[OrphanedMqttInfo] = Field(default_factory=list)
+    timestamp: int = Field(default_factory=lambda: int(datetime.now().timestamp() * 1000))
+
+
+class CleanupReport(BaseModel):
+    """Summary of cleaned up orphaned resources."""
+    files_deleted: int = 0
+    faces_deleted: int = 0
+    vectors_deleted: int = 0
+    mqtt_cleared: int = 0
+    timestamp: int = Field(default_factory=lambda: int(datetime.now().timestamp() * 1000))
+
+
 class Entity(BaseModel):
     """Media entity with metadata and file properties.
 

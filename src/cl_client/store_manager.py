@@ -26,6 +26,8 @@ from .store_models import (
     EntityVersion,
     StoreConfig,
     StoreOperationResult,
+    AuditReport,
+    CleanupReport,
 )
 from .intelligence_models import (
     EntityJobResponse,
@@ -569,20 +571,28 @@ class StoreManager:
     ) -> StoreOperationResult[None]:
         """Hard delete an entity (permanent removal).
 
-        Automatically soft-deletes the entity first using force=True by default.
-
-        Requires media_store_write permission (always requires auth).
-
         Args:
             entity_id: Entity ID to delete
-            force: If True (default), automatically soft-delete first if not already soft-deleted
+            force: If True (default), automatically soft-delete first if not already soft-deleted.
+                   Implemented as a two-step process: PATCH is_deleted=True, then DELETE.
 
         Returns:
             StoreOperationResult with success/error status
         """
         try:
-            # Use force=True to automatically handle soft-deletion
-            await self._store_client.delete_entity(entity_id=entity_id, force=force)
+            if force:
+                # Step 1: Ensure it's soft-deleted
+                # We check current status first or just try to patch
+                patch_res = await self.patch_entity(entity_id, is_deleted=True)
+                if not patch_res.is_success:
+                    # If entity doesn't exist, patch will fail with 404
+                    if "Not Found" in str(patch_res.error) or "404" in str(patch_res.error):
+                         return cast(StoreOperationResult[None], patch_res)
+                    # For other errors (like permission), we can't proceed
+                    return cast(StoreOperationResult[None], patch_res)
+
+            # Step 2: Hard delete
+            await self._store_client.delete_entity(entity_id=entity_id)
             return StoreOperationResult[None](
                 success="Entity deleted successfully",
                 data=None,
@@ -591,6 +601,60 @@ class StoreManager:
             return cast(StoreOperationResult[None], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[None](error=f"Unexpected error: {str(e)}")
+
+    async def delete_face(self, face_id: int) -> StoreOperationResult[None]:
+        """Delete a face completely.
+
+        Args:
+            face_id: Face ID to delete
+
+        Returns:
+            StoreOperationResult with success/error status
+        """
+        try:
+            await self._store_client.delete_face(face_id)
+            return StoreOperationResult[None](
+                success="Face deleted successfully",
+                data=None,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[None], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[None](error=f"Unexpected error: {str(e)}")
+
+    async def get_audit_report(self) -> StoreOperationResult[AuditReport]:
+        """Generate a comprehensive audit report (admin only).
+
+        Returns:
+            StoreOperationResult with AuditReport
+        """
+        try:
+            report = await self._store_client.get_audit_report()
+            return StoreOperationResult[AuditReport](
+                success="Audit report generated successfully",
+                data=report,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[AuditReport], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[AuditReport](error=f"Unexpected error: {str(e)}")
+
+    async def clear_orphans(self) -> StoreOperationResult[CleanupReport]:
+        """Remove all orphaned resources (admin only).
+
+        Returns:
+            StoreOperationResult with CleanupReport
+        """
+        try:
+            report = await self._store_client.clear_orphans()
+            return StoreOperationResult[CleanupReport](
+                success="Orphaned resources cleared successfully",
+                data=report,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[CleanupReport], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[CleanupReport](error=f"Unexpected error: {str(e)}")
 
     # Admin operations
 

@@ -115,6 +115,12 @@ def cli_config(request: pytest.FixtureRequest) -> CliConfig:
 
 
 @pytest.fixture(scope="session")
+def created_entities() -> set[int]:
+    """Store entity IDs created during this test session for cleanup."""
+    return set()
+
+
+@pytest.fixture(scope="session")
 def compute_server_info(cli_config: CliConfig) -> ComputeServerInfo:
     """Query compute server for auth_required and guest_mode flags."""
     info = asyncio.run(get_server_info(cli_config.compute_url))
@@ -286,12 +292,36 @@ async def store_manager(auth_config: AuthConfig):
 
     mgr = session.create_store_manager(timeout=TIMEOUT)
     await mgr.__aenter__()
+
+    # Wrap create_entity to track created IDs
+    original_create = mgr.create_entity
+    
+    async def tracked_create(*args, **kwargs):
+        res = await original_create(*args, **kwargs)
+        if res.is_success and res.data:
+            from conftest import created_entities
+            # Note: Conftest is a bit tricky with imports, using global state might be easier
+            # but let's try to find the fixture value if possible, or use a global.
+            # Using a global in this module for simplicity as it's a test helper.
+            _track_entity_id(res.data.id)
+        return res
+    
+    mgr.create_entity = tracked_create
     mgr._auth_session = session  # type: ignore[attr-defined]
 
     yield mgr
 
     await mgr.__aexit__(None, None, None)
     await session.close()
+
+
+# Global set to track entities across trials within the same process
+_CREATED_ENTITY_IDS: set[int] = set()
+
+
+def _track_entity_id(entity_id: int) -> None:
+    """Internal helper to track entity IDs."""
+    _CREATED_ENTITY_IDS.add(entity_id)
 
 
 @pytest.fixture
@@ -427,50 +457,36 @@ async def cleanup_store_entities(
         auth_url = auth_config.auth_url
         store_url = auth_config.store_url
 
-        async with httpx.AsyncClient() as client:
-            # Login
-            token_resp = await client.post(
-                f"{auth_url}/auth/token",
-                data={
-                    "username": username,
-                    "password": password,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=5.0,
-            )
+        from cl_client.store_manager import StoreManager
+        from cl_client import ServerConfig, SessionManager
 
-            if token_resp.status_code != 200:
-                return
+        config = ServerConfig(
+            auth_url=auth_url,
+            compute_url=compute_url,
+            store_url=store_url,
+        )
+        
+        async with SessionManager(server_config=config) as session:
+            await session.login(username, password)
+            async with session.create_store_manager() as mgr:
+                # 1. Try to delete specifically tracked entities first
+                if _CREATED_ENTITY_IDS:
+                    import logging
+                    logging.info(f"Cleaning up {len(_CREATED_ENTITY_IDS)} tracked entities...")
+                    # Copy set to avoid modification during iteration
+                    ids_to_delete = list(_CREATED_ENTITY_IDS)
+                    for entity_id in ids_to_delete:
+                        # Use force=True to handle soft-deletion automatically
+                        _ = await mgr.delete_entity(entity_id, force=True)
+                        _CREATED_ENTITY_IDS.discard(entity_id)
 
-            token = token_resp.json()["access_token"]
+                # 2. Try bulk delete as fallback (if admin)
+                # This is still useful if common setup creates entities outside tracked calls
+                await mgr.store_client.delete_all_entities()
 
-            # Try bulk delete first (fastest, requires admin)
-            bulk_resp = await client.delete(
-                f"{store_url}/entities",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0,
-            )
-
-            if bulk_resp.status_code == 403:
-                # Fallback for non-admin: list and delete individually
-                # This still clears Qdrant because delete_entity now includes vector cleanup
-                resp = await client.get(
-                    f"{store_url}/entities?page=1&page_size=100",
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=5.0,
-                )
-
-                if resp.status_code == 200:
-                    entities = resp.json().get("items", [])
-                    for entity in entities:
-                        await client.delete(
-                            f"{store_url}/entities/{entity['id']}",
-                            headers={"Authorization": f"Bearer {token}"},
-                            timeout=5.0,
-                        )
-
-    except Exception:
+    except Exception as e:
         # Non-fatal cleanup failure
-        pass
+        import logging
+        logging.warning(f"Cleanup failed: {e}")
 
     yield

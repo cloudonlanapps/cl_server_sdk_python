@@ -19,6 +19,8 @@ from cl_client.store_models import (
     EntityVersion,
     RootResponse,
     StoreConfig,
+    AuditReport,
+    CleanupReport,
 )
 from cl_client.types import UNSET, Unset
 from cl_client.intelligence_models import (
@@ -441,12 +443,40 @@ class StoreClient:
         _ = response.raise_for_status()
         return Entity.model_validate(response.json())
 
-    async def delete_entity(self, entity_id: int, force: bool = False) -> None:
+        response = await self._client.patch(
+            f"{self._base_url}/entities/{entity_id}",
+            data=data,
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return Entity.model_validate(response.json())
+
+    async def delete_entity(self, entity_id: int) -> None:
         """Hard delete an entity.
+
+        Note: Server requires entity to be soft-deleted (is_deleted=True) first.
+        Use patch_entity to soft-delete if needed, or use StoreManager.delete_entity(force=True).
 
         Args:
             entity_id: Entity ID
-            force: If True, automatically soft-delete the entity first if not already soft-deleted
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (e.g. 400 if not soft-deleted)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.delete(
+            f"{self._base_url}/entities/{entity_id}",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+
+    async def delete_face(self, face_id: int) -> None:
+        """Delete a face completely (DB + vector + file).
+
+        Args:
+            face_id: Face ID to delete
 
         Raises:
             httpx.HTTPStatusError: If the request fails
@@ -454,21 +484,20 @@ class StoreClient:
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
-        params = {"force": str(force).lower()}  # Convert boolean to lowercase string for query param
         response = await self._client.delete(
-            f"{self._base_url}/entities/{entity_id}",
+            f"{self._base_url}/faces/{face_id}",
             headers=await self._get_headers(),
-            params=params,
         )
         _ = response.raise_for_status()
 
     async def delete_all_entities(self) -> None:
         """Delete all entities (admin only).
 
-        This performs a bulk delete of all entities in the store.
+        .. deprecated:: 1.0
+           This endpoint is not standard and may be removed in future server versions.
 
         Raises:
-            httpx.HTTPStatusError: If the request fails (403 if not admin)
+            httpx.HTTPStatusError: If the request fails (403 if not admin, 404 if not enabled)
         """
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
@@ -478,6 +507,44 @@ class StoreClient:
             headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
+
+    # System/Audit operations
+
+    async def get_audit_report(self) -> AuditReport:
+        """Generate a comprehensive audit report of data integrity issues.
+
+        Requires admin role.
+
+        Returns:
+            AuditReport model
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/system/audit",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return AuditReport.model_validate(response.json())
+
+    async def clear_orphans(self) -> CleanupReport:
+        """Remove all orphaned resources identified by the audit system.
+
+        Requires admin role.
+
+        Returns:
+            CleanupReport model
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.post(
+            f"{self._base_url}/system/clear-orphans",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return CleanupReport.model_validate(response.json())
 
     # Admin operations
 
