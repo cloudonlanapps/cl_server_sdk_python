@@ -105,3 +105,70 @@ async def test_intelligence_features(
 
     finally:
         await store_manager.delete_entity(entity.id)
+
+@pytest.mark.integration
+@pytest.mark.intelligence
+@pytest.mark.asyncio
+async def test_consolidated_deletion_flow(
+    store_manager: StoreManager,
+    unique_face_single: Path,
+):
+    """Test consolidated deletion flow (DEL-03, DEL-04, DEL-05, DEL-08)."""
+    image_path = unique_face_single
+    if not image_path.exists():
+        pytest.skip(f"Test image not found: {image_path}")
+        
+    # 1. Create Entity and Wait for Processing
+    create_result = await store_manager.create_entity(
+        is_collection=False,
+        label="Consolidated Delete Test",
+        image_path=image_path,
+    )
+    assert create_result.is_success
+    entity = create_result.value_or_throw()
+    
+    try:
+        # Wait for full processing
+        assert await wait_for_job(store_manager, entity.id, "clip_embedding")
+        assert await wait_for_job(store_manager, entity.id, "face_detection")
+        assert await wait_for_job(store_manager, entity.id, "dino_embedding")
+        
+        # 2. Verify initial state (Faces exist)
+        intel_result = await store_manager.get_entity_intelligence(entity.id)
+        assert intel_result.is_success
+        intelligence_data = intel_result.value_or_throw()
+        initial_face_count = intelligence_data.face_count if intelligence_data else 0
+        assert initial_face_count > 0, "Should have at least one face"
+        
+        faces_result = await store_manager.get_entity_faces(entity.id)
+        assert faces_result.is_success
+        faces = faces_result.value_or_throw()
+        assert len(faces) == initial_face_count
+        
+        face_id_to_delete = faces[0].id
+        
+        # 3. Delete one face
+        delete_res = await store_manager.delete_face(face_id_to_delete)
+        assert delete_res.is_success, f"Delete face failed: {delete_res.error}"
+        
+        # 4. Verify cleanup (Face gone, count decremented)
+        after_faces_result = await store_manager.get_entity_faces(entity.id)
+        assert after_faces_result.is_success
+        assert not any(f.id == face_id_to_delete for f in after_faces_result.value_or_throw())
+        
+        after_intel_result = await store_manager.get_entity_intelligence(entity.id)
+        assert after_intel_result.is_success
+        after_intel_data = after_intel_result.value_or_throw()
+        assert after_intel_data and after_intel_data.face_count == initial_face_count - 1
+        
+        # 5. Delete Entity (Full Cleanup)
+        entity_delete_res = await store_manager.delete_entity(entity.id)
+        assert entity_delete_res.is_success
+        
+        # Verify entity gone
+        read_res = await store_manager.read_entity(entity.id)
+        assert read_res.is_error
+        assert "Not Found" in str(read_res.error)
+        
+    finally:
+        await store_manager.delete_entity(entity.id)
