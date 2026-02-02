@@ -354,8 +354,7 @@ export COMPUTE_URL="http://localhost:8002"       # Compute service URL
 export STORE_URL="http://localhost:8001"         # Store service URL (future)
 
 # MQTT broker
-export MQTT_BROKER_HOST="localhost"
-export MQTT_BROKER_PORT="1883"
+export MQTT_URL="mqtt://localhost:1883"
 
 # Authentication (for testing)
 export TEST_USERNAME="testuser"                  # Test user credentials
@@ -374,8 +373,7 @@ from cl_client.server_config import ServerConfig
 config = ServerConfig(
     auth_url="http://localhost:8000",
     compute_url="http://localhost:8002",
-    mqtt_broker="localhost",
-    mqtt_port=1883
+    mqtt_url="mqtt://localhost:1883"
 )
 
 # SessionManager uses ServerConfig automatically
@@ -387,8 +385,7 @@ session = SessionManager(server_config=ServerConfig.from_env())
 # Direct client configuration (no-auth mode)
 client = ComputeClient(
     base_url="http://localhost:8002",
-    mqtt_broker="localhost",
-    mqtt_port=1883,
+    mqtt_url="mqtt://localhost:1883",
     timeout=30.0
 )
 ```

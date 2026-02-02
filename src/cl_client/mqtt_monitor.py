@@ -26,8 +26,8 @@ from .models import (
     WorkerCapability,
 )
 
-# Singleton registry for shared MQTT monitors: (broker, port) -> (monitor, ref_count)
-_mqtt_registry: dict[tuple[str, int], tuple[MQTTJobMonitor, int]] = {}
+# Singleton registry for shared MQTT monitors: mqtt_url -> (monitor, ref_count)
+_mqtt_registry: dict[str | None, tuple[MQTTJobMonitor, int]] = {}
 _registry_lock = threading.Lock()
 
 
@@ -60,22 +60,22 @@ class EntityStatusPayload(BaseModel):
 class MQTTJobMonitor:
     """MQTT monitor for job status and worker capabilities."""
 
+    # Instance attributes with type annotations
+    broker: str
+    port: int
+    mqtt_url: str
+
     def __init__(
         self,
-        broker: str | None = None,
-        port: int | None = None,
+        mqtt_url: str,
         connect_timeout: float = 5.0,
     ) -> None:
         """Initialize MQTT monitor.
 
         Args:
-            broker: MQTT broker host (default from config)
-            port: MQTT broker port (default from config)
+            mqtt_url: MQTT broker URL (e.g., mqtt://localhost:1883). Mandatory.
             connect_timeout: Timeout for initial connection in seconds (default 5.0)
         """
-        self.broker: str = broker or ComputeClientConfig.MQTT_BROKER_HOST
-        self.port: int = port or ComputeClientConfig.MQTT_BROKER_PORT
-
         # Job subscriptions: subscription_id -> (job_id, on_progress, on_complete, task_type)
         self._job_subscriptions: dict[
             str,
@@ -116,12 +116,32 @@ class MQTTJobMonitor:
             # No running loop, will be set when connect() is called
             self._event_loop = None
 
+
+        # Validate using centralized validator from cl_ml_tools
+        try:
+            from cl_ml_tools.utils.mqtt.mqtt_impl import MQTTBroadcaster
+
+            self.broker, self.port = MQTTBroadcaster.validate_mqtt_url(mqtt_url)
+            self.mqtt_url = mqtt_url
+        except ImportError:
+            # Fallback if cl_ml_tools not available (shouldn't happen in normal use)
+            logger.warning("cl_ml_tools not available, using basic URL parsing")
+            from urllib.parse import urlparse
+
+            parsed = urlparse(mqtt_url)
+            self.broker = parsed.hostname
+            self.port = parsed.port if parsed.port else 1883
+            self.mqtt_url = mqtt_url
+
         # MQTT client
         self._client: mqtt.Client = mqtt.Client(CallbackAPIVersion.VERSION2)  # type: ignore[attr-defined]
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
 
         # Connect to broker and wait for connection
+        # At this point, broker and port are guaranteed to be set (not None)
+        assert self.broker is not None
+        assert self.port is not None
         self._connect()
 
         # Wait for connection to establish (blocking)
@@ -132,6 +152,9 @@ class MQTTJobMonitor:
 
     def _connect(self) -> None:
         """Connect to MQTT broker."""
+        # At this point, broker and port are guaranteed to be set
+        assert self.broker is not None
+        assert self.port is not None
         try:
             _ = self._client.connect(self.broker, self.port, keepalive=60)
             _ = self._client.loop_start()
@@ -385,6 +408,8 @@ class MQTTJobMonitor:
             # Later...
             monitor.unsubscribe(sub_id)
         """
+
+
         # Generate unique subscription ID
         subscription_id = str(uuid.uuid4())
 
@@ -422,6 +447,8 @@ class MQTTJobMonitor:
         Returns:
             Subscription ID
         """
+
+
         subscription_id = str(uuid.uuid4())
 
         # Capture event loop
@@ -443,6 +470,8 @@ class MQTTJobMonitor:
 
     def unsubscribe_entity_status(self, subscription_id: str) -> None:
         """Unsubscribe from entity status updates."""
+
+
         if subscription_id in self._entity_subscriptions:
             _entity_id, _callback, topic = self._entity_subscriptions[subscription_id]
             # Unsubscribe from MQTT topic to prevent leaks
@@ -456,6 +485,8 @@ class MQTTJobMonitor:
         Args:
             subscription_id: Subscription ID returned from subscribe_job_updates()
         """
+
+
         if subscription_id not in self._job_subscriptions:
             logger.warning(f"Subscription not found: {subscription_id}")
             return
@@ -526,46 +557,45 @@ class MQTTJobMonitor:
 
     def close(self) -> None:
         """Close MQTT connection and cleanup."""
+
+
         _ = self._client.loop_stop()
         _ = self._client.disconnect()
         self._connected = False
         logger.info("MQTT monitor closed")
 
 
-def get_mqtt_monitor(broker: str | None = None, port: int | None = None) -> MQTTJobMonitor:
+def get_mqtt_monitor(mqtt_url: str) -> MQTTJobMonitor:
     """Get shared MQTT monitor instance with reference counting.
-    
+
     Args:
-        broker: Broker host (default from config)
-        port: Broker port (default from config)
-        
+        mqtt_url: MQTT broker URL
+
     Returns:
         Shared MQTTJobMonitor instance
     """
-    broker = broker or ComputeClientConfig.MQTT_BROKER_HOST
-    port = port or ComputeClientConfig.MQTT_BROKER_PORT
-    key = (broker, port)
-    
+    key = mqtt_url  # Use mqtt_url as the key
+
     with _registry_lock:
         if key in _mqtt_registry:
             monitor, count = _mqtt_registry[key]
             _mqtt_registry[key] = (monitor, count + 1)
-            logger.debug(f"Reusing MQTT monitor for {broker}:{port} (ref_count={count + 1})")
+            logger.debug(f"Reusing MQTT monitor for {mqtt_url} (ref_count={count + 1})")
             return monitor
-            
-        monitor = MQTTJobMonitor(broker=broker, port=port)
+
+        monitor = MQTTJobMonitor(mqtt_url=mqtt_url)
         _mqtt_registry[key] = (monitor, 1)
-        logger.debug(f"Created new MQTT monitor for {broker}:{port}")
+        logger.debug(f"Created new MQTT monitor for {mqtt_url}")
         return monitor
 
 
 def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
     """Release reference to shared MQTT monitor.
-    
+
     Decrements reference count. If 0, closes and removes monitor.
     """
-    key = (monitor.broker, monitor.port)
-    
+    key = monitor.mqtt_url
+
     with _registry_lock:
         if key not in _mqtt_registry:
             logger.warning(f"Attempting to release unknown MQTT monitor: {key}")
@@ -575,13 +605,13 @@ def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
             except Exception:
                 pass
             return
-            
+
         stored_monitor, count = _mqtt_registry[key]
-        
+
         # Sanity check
         if stored_monitor is not monitor:
             logger.warning("Releasing monitor that doesn't match registry instance")
-            
+
         if count <= 1:
             # Last reference, close and remove
             logger.debug(f"Closing MQTT monitor for {key} (ref_count=0)")

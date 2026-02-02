@@ -329,8 +329,7 @@ class TestSessionManagerComputeClient:
 
         config = ServerConfig(
             compute_url="https://custom-compute.example.com",
-            mqtt_broker="custom-broker",
-            mqtt_port=8883,
+            mqtt_url="mqtts://custom-broker:8883",
         )
 
         session = SessionManager(server_config=config)
@@ -338,8 +337,7 @@ class TestSessionManagerComputeClient:
         # Verify config is stored
         assert session._config == config
         assert session._config.compute_url == "https://custom-compute.example.com"
-        assert session._config.mqtt_broker == "custom-broker"
-        assert session._config.mqtt_port == 8883
+        assert session._config.mqtt_url == "mqtts://custom-broker:8883"
 
 
 class TestSessionManagerContextManager:

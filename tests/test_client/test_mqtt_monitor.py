@@ -21,35 +21,39 @@ def mock_mqtt_client():
 
 
 @pytest.fixture
-def monitor(mock_mqtt_client):
-    """Create MQTT monitor with mocked client."""
-    return MQTTJobMonitor()
+def monitor(mock_mqtt_client, mqtt_url):
+    """Create MQTT monitor with mocked client and mqtt_url."""
+    return MQTTJobMonitor(mqtt_url=mqtt_url)
 
 
-def test_init_connects_to_broker(mock_mqtt_client):
+def test_init_connects_to_broker(mock_mqtt_client, mqtt_url):
     """Test that monitor connects to MQTT broker on init."""
-    monitor = MQTTJobMonitor()
+    monitor = MQTTJobMonitor(mqtt_url=mqtt_url)
 
     # Verify connection was attempted
     mock_mqtt_client.connect.assert_called_once_with(
-        ComputeClientConfig.MQTT_BROKER_HOST,
-        ComputeClientConfig.MQTT_BROKER_PORT,
+        "localhost",
+        1883,
         keepalive=60,
     )
     mock_mqtt_client.loop_start.assert_called_once()
 
 
-def test_init_with_custom_broker():
-    """Test monitor with custom broker settings."""
+def test_init_with_custom_mqtt_url():
+    """Test monitor with custom mqtt_url settings."""
     with patch("cl_client.mqtt_monitor.mqtt.Client") as mock_client_class:
         mock_instance = MagicMock()
         mock_client_class.return_value = mock_instance
 
-        monitor = MQTTJobMonitor(broker="custom-broker", port=1234)
+        monitor = MQTTJobMonitor(mqtt_url="mqtt://custom-broker:1234")
 
         assert monitor.broker == "custom-broker"
         assert monitor.port == 1234
+        assert monitor.mqtt_url == "mqtt://custom-broker:1234"
         mock_instance.connect.assert_called_once_with("custom-broker", 1234, keepalive=60)
+
+
+
 
 
 def test_subscribe_job_updates_returns_subscription_id(monitor, mock_mqtt_client):

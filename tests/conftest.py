@@ -8,6 +8,7 @@ Integration test fixtures are in tests/test_integration/conftest.py
 import os
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 # ============================================================================
@@ -27,6 +28,7 @@ class CliConfig(BaseModel):
     auth_url: str
     compute_url: str
     store_url: str
+    mqtt_url: str
     username: str | None
     password: str | None
 
@@ -66,6 +68,7 @@ class AuthConfig(BaseModel):
     auth_url: str
     compute_url: str
     store_url: str
+    mqtt_url: str
     compute_auth_required: bool
     compute_guest_mode: bool
     store_guest_mode: bool
@@ -143,3 +146,28 @@ def get_expected_error(auth_config: AuthConfig, operation_type: str) -> int:
 
     # Authenticated but insufficient permissions = 403 Forbidden
     return 403
+
+# ============================================================================
+# PYTEST CLI OPTIONS
+# ============================================================================
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add CLI options for all PySDK tests."""
+    # We use a try/except or check if already added to avoid conflicts if 
+    # integration conftest also defines it (though we plan to remove it there)
+    try:
+        parser.addoption(
+            "--mqtt-url",
+            action="store",
+            default="mqtt://localhost:1883",
+            help="MQTT broker URL (e.g., mqtt://localhost:1883)"
+        )
+    except ValueError:
+        pass # already added
+
+
+@pytest.fixture
+def mqtt_url(request: pytest.FixtureRequest) -> str:
+    """Fixture to get MQTT URL from pytest options."""
+    return str(request.config.getoption("--mqtt-url"))

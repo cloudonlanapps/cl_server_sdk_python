@@ -59,8 +59,7 @@ def test_init_with_custom_parameters(mock_mqtt_monitor: MagicMock, mock_httpx_cl
     client = ComputeClient(
         base_url="http://custom:9000",
         timeout=60.0,
-        mqtt_broker="custom-broker",
-        mqtt_port=1234,
+        mqtt_url="mqtt://custom-broker:1234",
         auth_provider=auth,
     )
 
@@ -73,8 +72,7 @@ def test_init_with_server_config(mock_mqtt_monitor: MagicMock, mock_httpx_client
     """Test client initialization with ServerConfig."""
     config = ServerConfig(
         compute_url="https://compute.example.com",
-        mqtt_broker="mqtt.example.com",
-        mqtt_port=8883,
+        mqtt_url="mqtts://mqtt.example.com:8883",
     )
 
     client = ComputeClient(server_config=config)
@@ -88,13 +86,12 @@ def test_init_with_server_config_and_overrides(
     """Test that explicit parameters override server_config."""
     config = ServerConfig(
         compute_url="https://config.example.com",
-        mqtt_broker="config-broker",
-        mqtt_port=1883,
+        mqtt_url="mqtt://config-broker:1883",
     )
 
     client = ComputeClient(
         base_url="https://override.example.com",
-        mqtt_broker="override-broker",
+        mqtt_url="mqtt://override-broker:1883",
         server_config=config,
     )
 

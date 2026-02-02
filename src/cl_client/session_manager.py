@@ -75,7 +75,7 @@ class SessionManager:
             base_url: Auth service URL (overrides server_config.auth_url)
             server_config: Server configuration (default: from environment)
         """
-        self._config: ServerConfig = server_config or ServerConfig.from_env()
+        self._config: ServerConfig = server_config or ServerConfig()
         self._auth_client: AuthClient = AuthClient(
             base_url=base_url,
             server_config=self._config,
@@ -306,8 +306,7 @@ class SessionManager:
 
         return ComputeClient(
             base_url=self._config.compute_url,
-            mqtt_broker=self._config.mqtt_broker,
-            mqtt_port=self._config.mqtt_port,
+            mqtt_url=self._config.mqtt_url,
             auth_provider=auth_provider,
         )
 

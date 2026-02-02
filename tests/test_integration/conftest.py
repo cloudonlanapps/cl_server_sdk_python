@@ -99,6 +99,7 @@ def cli_config(request: pytest.FixtureRequest) -> CliConfig:
     auth_url = request.config.getoption("--auth-url")
     compute_url = request.config.getoption("--compute-url")
     store_url = request.config.getoption("--store-url")
+    mqtt_url = request.config.getoption("--mqtt-url")
 
     if not auth_url or not compute_url or not store_url:
         pytest.fail(
@@ -109,6 +110,7 @@ def cli_config(request: pytest.FixtureRequest) -> CliConfig:
         auth_url=str(auth_url),
         compute_url=str(compute_url),
         store_url=str(store_url),
+        mqtt_url=str(mqtt_url),
         username=request.config.getoption("--username") or None,
         password=request.config.getoption("--password") or None,
     )
@@ -204,6 +206,7 @@ def auth_config(
         auth_url=cli_config.auth_url,
         compute_url=cli_config.compute_url,
         store_url=cli_config.store_url,
+        mqtt_url=cli_config.mqtt_url,
         compute_auth_required=compute_server_info.auth_required,
         compute_guest_mode=compute_server_info.guest_mode,
         store_guest_mode=store_server_info.guest_mode,
@@ -222,7 +225,10 @@ def auth_config(
 async def test_client(auth_config: AuthConfig):
     """Create ComputeClient with auth based on config."""
     if not auth_config.username:
-        client = ComputeClient(base_url=auth_config.compute_url)
+        client = ComputeClient(
+            base_url=auth_config.compute_url,
+            mqtt_url=auth_config.mqtt_url,
+        )
         yield client
         await client.close()
         return
@@ -235,6 +241,7 @@ async def test_client(auth_config: AuthConfig):
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
     )
     session = SessionManager(server_config=config)
 
@@ -282,6 +289,7 @@ async def store_manager(auth_config: AuthConfig):
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
     )
     session = SessionManager(server_config=config)
 

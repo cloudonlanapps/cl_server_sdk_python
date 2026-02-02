@@ -49,7 +49,7 @@ class AuthClient:
             server_config: Server configuration (default: from environment)
             timeout: Request timeout in seconds
         """
-        config = server_config or ServerConfig.from_env()
+        config = server_config or ServerConfig()
         self.base_url: str = base_url or config.auth_url
         self.timeout: float = timeout
 

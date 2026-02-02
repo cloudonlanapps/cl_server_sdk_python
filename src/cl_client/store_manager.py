@@ -15,7 +15,6 @@ import uuid
 import asyncio
 
 from .auth import JWTAuthProvider
-from .config import ComputeClientConfig
 from .server_config import ServerConfig
 from .store_client import StoreClient
 from .mqtt_monitor import MQTTJobMonitor, EntityStatusPayload, get_mqtt_monitor, release_mqtt_monitor
@@ -100,14 +99,12 @@ class StoreManager:
         # If created via guest() or authenticated(), we might have config stored?
         # Updated factories to pass config or we use defaults.
         
-        broker = ComputeClientConfig.MQTT_BROKER_HOST
-        port = ComputeClientConfig.MQTT_BROKER_PORT
-        
-        if self._config:
-            broker = self._config.mqtt_broker
-            port = self._config.mqtt_port
-            
-        self._mqtt_monitor = get_mqtt_monitor(broker=broker, port=port)
+        # Use config or default
+        if not self._config:
+            raise RuntimeError("StoreManager requires ServerConfig with mqtt_url to initialize monitoring")
+        mqtt_url = self._config.mqtt_url
+
+        self._mqtt_monitor = get_mqtt_monitor(mqtt_url=mqtt_url)
         return self._mqtt_monitor
 
     @property

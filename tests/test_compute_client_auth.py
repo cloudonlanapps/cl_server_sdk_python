@@ -7,7 +7,7 @@ from cl_client.auth import AuthProvider
 from cl_client.server_config import ServerConfig
 
 @pytest.mark.asyncio
-async def test_dynamic_header_updates():
+async def test_dynamic_header_updates(mqtt_url):
     """Verify that ComputeClient uses fresh headers for each request."""
     
     # Mock AuthProvider
@@ -26,10 +26,9 @@ async def test_dynamic_header_updates():
         base_url="http://test.local",
         auth_provider=mock_auth,
         server_config=ServerConfig(
+            mqtt_url=mqtt_url,
             auth_url="http://auth.local",
             compute_url="http://test.local",
-            mqtt_broker="localhost",
-            mqtt_port=1883
         )
     )
     

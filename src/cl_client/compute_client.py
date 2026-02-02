@@ -58,10 +58,9 @@ class ComputeClient(ClientProtocol):
 
     def __init__(
         self,
+        mqtt_url: str,
         base_url: str | None = None,
         timeout: float | None = None,
-        mqtt_broker: str | None = None,
-        mqtt_port: int | None = None,
         auth_provider: AuthProvider | None = None,
         server_config: ServerConfig | None = None,
     ) -> None:
@@ -70,8 +69,7 @@ class ComputeClient(ClientProtocol):
         Args:
             base_url: Server base URL (overrides server_config.compute_url)
             timeout: Request timeout in seconds (default from ComputeClientConfig)
-            mqtt_broker: MQTT broker host (overrides server_config.mqtt_broker)
-            mqtt_port: MQTT broker port (overrides server_config.mqtt_port)
+            mqtt_url: MQTT broker URL (overrides server_config.mqtt_url)
             auth_provider: Authentication provider (default: NoAuthProvider)
             server_config: Server configuration (default: from environment)
 
@@ -87,7 +85,7 @@ class ComputeClient(ClientProtocol):
             client = ComputeClient(server_config=config)
         """
         # Get config for defaults (from parameter or environment)
-        config = server_config or ServerConfig.from_env()
+        config = server_config or ServerConfig()
 
         # Use explicit parameters if provided, otherwise fall back to config
         self.base_url: str = base_url or config.compute_url
@@ -102,10 +100,7 @@ class ComputeClient(ClientProtocol):
         )
 
         # MQTT monitor for job status and worker capabilities
-        # Use explicit parameters if provided, otherwise fall back to config
-        mqtt_broker_final = mqtt_broker or config.mqtt_broker
-        mqtt_port_final = mqtt_port or config.mqtt_port
-        self._mqtt: MQTTJobMonitor = get_mqtt_monitor(broker=mqtt_broker_final, port=mqtt_port_final)
+        self._mqtt: MQTTJobMonitor = get_mqtt_monitor(mqtt_url=mqtt_url)
 
     async def _get_request_headers(self) -> dict[str, str]:
         """Get fresh authentication headers for a request.
