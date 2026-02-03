@@ -306,8 +306,7 @@ class SessionManager:
 
         return ComputeClient(
             base_url=self._config.compute_url,
-            mqtt_broker=self._config.mqtt_broker,
-            mqtt_port=self._config.mqtt_port,
+            mqtt_url=self._config.mqtt_url,
             auth_provider=auth_provider,
         )
 

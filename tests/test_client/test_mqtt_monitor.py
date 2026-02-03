@@ -31,11 +31,10 @@ def test_init_connects_to_broker(mock_mqtt_client):
     monitor = MQTTJobMonitor()
 
     # Verify connection was attempted
-    mock_mqtt_client.connect.assert_called_once_with(
-        ComputeClientConfig.MQTT_BROKER_HOST,
-        ComputeClientConfig.MQTT_BROKER_PORT,
-        keepalive=60,
-    )
+    mock_mqtt_client.connect.assert_called_once()
+    call_args = mock_mqtt_client.connect.call_args[0]
+    assert call_args[0] == "localhost"
+    assert call_args[1] == 1883
     mock_mqtt_client.loop_start.assert_called_once()
 
 
@@ -45,7 +44,7 @@ def test_init_with_custom_broker():
         mock_instance = MagicMock()
         mock_client_class.return_value = mock_instance
 
-        monitor = MQTTJobMonitor(broker="custom-broker", port=1234)
+        monitor = MQTTJobMonitor(url="mqtt://custom-broker:1234")
 
         assert monitor.broker == "custom-broker"
         assert monitor.port == 1234

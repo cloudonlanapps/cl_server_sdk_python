@@ -19,8 +19,8 @@ class ComputeClientConfig:
     DEFAULT_TIMEOUT: float = 30.0
 
     # MQTT Configuration
-    MQTT_BROKER_HOST: str = "localhost"
-    MQTT_BROKER_PORT: int = 1883
+    MQTT_URL: str = "mqtt://localhost:1883"
+
     MQTT_CAPABILITY_TOPIC_PREFIX: str = "inference/workers"
     MQTT_JOB_EVENTS_TOPIC: str = "inference/events"  # Single topic for all job events
 

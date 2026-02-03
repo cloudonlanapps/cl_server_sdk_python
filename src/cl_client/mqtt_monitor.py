@@ -26,8 +26,8 @@ from .models import (
     WorkerCapability,
 )
 
-# Singleton registry for shared MQTT monitors: (broker, port) -> (monitor, ref_count)
-_mqtt_registry: dict[tuple[str, int], tuple[MQTTJobMonitor, int]] = {}
+# Singleton registry for shared MQTT monitors: url -> (monitor, ref_count)
+_mqtt_registry: dict[str, tuple[MQTTJobMonitor, int]] = {}
 _registry_lock = threading.Lock()
 
 
@@ -62,19 +62,25 @@ class MQTTJobMonitor:
 
     def __init__(
         self,
-        broker: str | None = None,
-        port: int | None = None,
+        url: str | None = None,
         connect_timeout: float = 5.0,
     ) -> None:
         """Initialize MQTT monitor.
 
         Args:
-            broker: MQTT broker host (default from config)
-            port: MQTT broker port (default from config)
+            url: MQTT broker URL (default from config)
             connect_timeout: Timeout for initial connection in seconds (default 5.0)
         """
-        self.broker: str = broker or ComputeClientConfig.MQTT_BROKER_HOST
-        self.port: int = port or ComputeClientConfig.MQTT_BROKER_PORT
+        import urllib.parse
+
+        self.url = url or ComputeClientConfig.MQTT_URL
+        parsed = urllib.parse.urlparse(self.url)
+        
+        if parsed.scheme != "mqtt":
+            raise ValueError(f"Invalid scheme in MQTT URL: {self.url}. Expected 'mqtt://'")
+            
+        self.broker = parsed.hostname or "localhost"
+        self.port = parsed.port or 1883
 
         # Job subscriptions: subscription_id -> (job_id, on_progress, on_complete, task_type)
         self._job_subscriptions: dict[
@@ -532,30 +538,27 @@ class MQTTJobMonitor:
         logger.info("MQTT monitor closed")
 
 
-def get_mqtt_monitor(broker: str | None = None, port: int | None = None) -> MQTTJobMonitor:
+def get_mqtt_monitor(url: str | None = None) -> MQTTJobMonitor:
     """Get shared MQTT monitor instance with reference counting.
     
     Args:
-        broker: Broker host (default from config)
-        port: Broker port (default from config)
+        url: Broker URL (default from config)
         
     Returns:
         Shared MQTTJobMonitor instance
     """
-    broker = broker or ComputeClientConfig.MQTT_BROKER_HOST
-    port = port or ComputeClientConfig.MQTT_BROKER_PORT
-    key = (broker, port)
+    url = url or ComputeClientConfig.MQTT_URL
     
     with _registry_lock:
-        if key in _mqtt_registry:
-            monitor, count = _mqtt_registry[key]
-            _mqtt_registry[key] = (monitor, count + 1)
-            logger.debug(f"Reusing MQTT monitor for {broker}:{port} (ref_count={count + 1})")
+        if url in _mqtt_registry:
+            monitor, count = _mqtt_registry[url]
+            _mqtt_registry[url] = (monitor, count + 1)
+            logger.debug(f"Reusing MQTT monitor for {url} (ref_count={count + 1})")
             return monitor
             
-        monitor = MQTTJobMonitor(broker=broker, port=port)
-        _mqtt_registry[key] = (monitor, 1)
-        logger.debug(f"Created new MQTT monitor for {broker}:{port}")
+        monitor = MQTTJobMonitor(url=url)
+        _mqtt_registry[url] = (monitor, 1)
+        logger.debug(f"Created new MQTT monitor for {url}")
         return monitor
 
 
@@ -564,11 +567,11 @@ def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
     
     Decrements reference count. If 0, closes and removes monitor.
     """
-    key = (monitor.broker, monitor.port)
+    url = monitor.url
     
     with _registry_lock:
-        if key not in _mqtt_registry:
-            logger.warning(f"Attempting to release unknown MQTT monitor: {key}")
+        if url not in _mqtt_registry:
+            logger.warning(f"Attempting to release unknown MQTT monitor: {url}")
             # Ensure it's closed regardless
             try:
                 monitor.close()
@@ -576,7 +579,7 @@ def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
                 pass
             return
             
-        stored_monitor, count = _mqtt_registry[key]
+        stored_monitor, count = _mqtt_registry[url]
         
         # Sanity check
         if stored_monitor is not monitor:
@@ -584,10 +587,10 @@ def release_mqtt_monitor(monitor: MQTTJobMonitor) -> None:
             
         if count <= 1:
             # Last reference, close and remove
-            logger.debug(f"Closing MQTT monitor for {key} (ref_count=0)")
+            logger.debug(f"Closing MQTT monitor for {url} (ref_count=0)")
             monitor.close()
-            del _mqtt_registry[key]
+            del _mqtt_registry[url]
         else:
             # Decrement
-            _mqtt_registry[key] = (stored_monitor, count - 1)
-            logger.debug(f"Released MQTT monitor for {key} (ref_count={count - 1})")
+            _mqtt_registry[url] = (stored_monitor, count - 1)
+            logger.debug(f"Released MQTT monitor for {url} (ref_count={count - 1})")

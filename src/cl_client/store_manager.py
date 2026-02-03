@@ -100,14 +100,12 @@ class StoreManager:
         # If created via guest() or authenticated(), we might have config stored?
         # Updated factories to pass config or we use defaults.
         
-        broker = ComputeClientConfig.MQTT_BROKER_HOST
-        port = ComputeClientConfig.MQTT_BROKER_PORT
+        url = ComputeClientConfig.MQTT_URL
         
         if self._config:
-            broker = self._config.mqtt_broker
-            port = self._config.mqtt_port
+            url = self._config.mqtt_url
             
-        self._mqtt_monitor = get_mqtt_monitor(broker=broker, port=port)
+        self._mqtt_monitor = get_mqtt_monitor(url=url)
         return self._mqtt_monitor
 
     @property
