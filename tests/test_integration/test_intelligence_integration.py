@@ -7,7 +7,7 @@ from cl_client import StoreManager
 from loguru import logger
 
 TEST_VECTORS_DIR = Path(
-    os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server_test_media")
+    os.getenv("TEST_VECTORS_DIR", str(Path.home() / "cl_server_test_media"))
 )
 
 # Use an image we know has a face

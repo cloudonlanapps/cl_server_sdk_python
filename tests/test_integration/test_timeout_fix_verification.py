@@ -10,7 +10,7 @@ import pytest
 from cl_client import StoreManager
 
 TEST_VECTORS_DIR = Path(
-    os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server_test_media")
+    os.getenv("TEST_VECTORS_DIR", str(Path.home() / "cl_server_test_media"))
 )
 
 # Use only 3 images to avoid overwhelming the server

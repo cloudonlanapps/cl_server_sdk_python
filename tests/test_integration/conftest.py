@@ -310,7 +310,7 @@ def is_no_auth(auth_config: AuthConfig) -> bool:
 
 # Test vectors base directory (can be overridden via environment variable)
 TEST_VECTORS_DIR = Path(
-    os.getenv("TEST_VECTORS_DIR", "/Users/anandasarangaram/Work/cl_server_test_media")
+    os.getenv("TEST_VECTORS_DIR", str(Path.home() / "cl_server_test_media"))
 )
 
 
