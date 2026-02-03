@@ -11,7 +11,7 @@ from cl_client.compute_client import ComputeClient
 from cl_client.config import ComputeClientConfig
 from cl_client.exceptions import WorkerUnavailableError
 from cl_client.models import JobResponse
-from cl_client.server_config import ServerConfig
+from cl_client.server_pref import ServerPref
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,8 +59,7 @@ def test_init_with_custom_parameters(mock_mqtt_monitor: MagicMock, mock_httpx_cl
     client = ComputeClient(
         base_url="http://custom:9000",
         timeout=60.0,
-        mqtt_broker="custom-broker",
-        mqtt_port=1234,
+        mqtt_url="mqtt://custom-broker:1234",
         auth_provider=auth,
     )
 
@@ -69,33 +68,31 @@ def test_init_with_custom_parameters(mock_mqtt_monitor: MagicMock, mock_httpx_cl
     assert client.auth == auth
 
 
-def test_init_with_server_config(mock_mqtt_monitor: MagicMock, mock_httpx_client: AsyncMock) -> None:
-    """Test client initialization with ServerConfig."""
-    config = ServerConfig(
+def test_init_with_server_pref(mock_mqtt_monitor: MagicMock, mock_httpx_client: AsyncMock) -> None:
+    """Test client initialization with ServerPref."""
+    config = ServerPref(
         compute_url="https://compute.example.com",
-        mqtt_broker="mqtt.example.com",
-        mqtt_port=8883,
+        mqtt_url="mqtt://mqtt.example.com:8883",
     )
 
-    client = ComputeClient(server_config=config)
+    client = ComputeClient(server_pref=config)
 
     assert client.base_url == "https://compute.example.com"
 
 
-def test_init_with_server_config_and_overrides(
+def test_init_with_server_pref_and_overrides(
     mock_mqtt_monitor: MagicMock, mock_httpx_client: AsyncMock
 ) -> None:
-    """Test that explicit parameters override server_config."""
-    config = ServerConfig(
+    """Test that explicit parameters override server_pref."""
+    config = ServerPref(
         compute_url="https://config.example.com",
-        mqtt_broker="config-broker",
-        mqtt_port=1883,
+        mqtt_url="mqtt://config-broker:1883",
     )
 
     client = ComputeClient(
         base_url="https://override.example.com",
-        mqtt_broker="override-broker",
-        server_config=config,
+        mqtt_url="mqtt://override-broker:1883",
+        server_pref=config,
     )
 
     assert client.base_url == "https://override.example.com"
@@ -103,11 +100,11 @@ def test_init_with_server_config_and_overrides(
 
 
 def test_init_backward_compatibility(mock_mqtt_monitor: MagicMock, mock_httpx_client: AsyncMock) -> None:
-    """Test that existing code without server_config still works."""
-    # This is how code worked before adding server_config
+    """Test that existing code without server_pref still works."""
+    # This is how code worked before adding server_pref
     client = ComputeClient()
 
-    # Should use defaults from environment (via ServerConfig.from_env())
+    # Should use defaults from environment (via ServerPref.from_env())
     assert client.base_url is not None
     assert client.timeout == ComputeClientConfig.DEFAULT_TIMEOUT
     assert isinstance(client.auth, NoAuthProvider)

@@ -20,12 +20,12 @@ test_auth.py                     # Auth providers (JWT, NoAuth, default)
 test_auth_client.py              # AuthClient API (login, register, permissions)
 test_auth_models.py              # Auth response models and serialization
 test_compute_client.py           # ComputeClient API (job submission, polling, callbacks)
-test_config.py                   # ServerConfig and SessionManager configuration
+test_config.py                   # ServerPref and SessionManager configuration
 test_exceptions.py               # SDK exception types and error handling
 test_models.py                   # Job, Task, and capability models
 test_mqtt_monitor.py             # MQTT connection and callback routing
 test_plugins.py                  # Plugin client factories (clip_embedding, exif, etc.)
-test_server_config.py            # ServerConfig and credential management
+test_server_pref.py            # ServerPref and credential management
 test_session_manager.py          # SessionManager (login, logout, token refresh)
 test_store_client.py             # StoreClient API (entity CRUD, versioning)
 test_store_manager.py            # StoreManager (context manager, authentication)

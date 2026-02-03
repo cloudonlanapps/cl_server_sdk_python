@@ -47,15 +47,15 @@ class TestStoreManagerInit:
     async def test_authenticated_mode(self):
         """Test authenticated mode initialization."""
         from cl_client.auth_models import UserResponse
-        from cl_client.server_config import ServerConfig
+        from cl_client.server_pref import ServerPref
         from cl_client.session_manager import SessionManager
 
         # Create session manager
-        config = ServerConfig(
+        config = ServerPref(
             auth_url="http://localhost:8000",
             store_url="http://localhost:8001",
         )
-        session = SessionManager(server_config=config)
+        session = SessionManager(server_pref=config)
 
         # Mock login and get_current_user
         with patch.object(session._auth_client, "login") as mock_login, patch.object(
@@ -78,7 +78,7 @@ class TestStoreManagerInit:
 
         # Create store manager from session
         manager = StoreManager.authenticated(
-            config=config,
+            server_pref=config,
             get_cached_token=session.get_token,
         )
 

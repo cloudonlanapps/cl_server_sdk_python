@@ -15,7 +15,7 @@ from cl_client.auth_models import (
     UserResponse,
     UserUpdateRequest,
 )
-from cl_client.server_config import ServerConfig
+from cl_client.server_pref import ServerPref
 
 
 class TestAuthClientInit:
@@ -36,19 +36,19 @@ class TestAuthClientInit:
 
         assert client.base_url == "https://auth.example.com"
 
-    def test_auth_client_custom_server_config(self):
-        """Test AuthClient with custom ServerConfig."""
-        config = ServerConfig(auth_url="https://custom-auth.example.com")
-        client = AuthClient(server_config=config)
+    def test_auth_client_custom_server_pref(self):
+        """Test AuthClient with custom ServerPref."""
+        config = ServerPref(auth_url="https://custom-auth.example.com")
+        client = AuthClient(server_pref=config)
 
         assert client.base_url == "https://custom-auth.example.com"
 
-    def test_auth_client_base_url_overrides_config(self):
-        """Test that base_url parameter overrides server_config."""
-        config = ServerConfig(auth_url="https://config-auth.example.com")
+    def test_auth_client_base_url_overrides_pref(self):
+        """Test that base_url parameter overrides server_pref."""
+        config = ServerPref(auth_url="https://config-auth.example.com")
         client = AuthClient(
             base_url="https://override-auth.example.com",
-            server_config=config,
+            server_pref=config,
         )
 
         assert client.base_url == "https://override-auth.example.com"

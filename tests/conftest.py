@@ -1,14 +1,56 @@
-"""
-Shared test configuration - Pydantic models and helper functions.
-
-This conftest provides models and helpers that are imported directly by test files.
-Integration test fixtures are in tests/test_integration/conftest.py
-"""
+# Shared test configuration - Pydantic models and helper functions.
+# This conftest provides models and helpers that are imported directly by test files.
+# Integration test fixtures are in tests/test_integration/conftest.py
 
 import os
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
+
+# ============================================================================
+# PYTEST CLI OPTIONS
+# ============================================================================
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add CLI options for all tests."""
+    parser.addoption(
+        "--auth-url",
+        action="store",
+        default=None,
+        help="Auth service URL"
+    )
+    parser.addoption(
+        "--compute-url",
+        action="store",
+        default=None,
+        help="Compute service URL"
+    )
+    parser.addoption(
+        "--store-url",
+        action="store",
+        default=None,
+        help="Store service URL"
+    )
+    parser.addoption(
+        "--username",
+        action="store",
+        default=None,
+        help="Username for authenticated tests"
+    )
+    parser.addoption(
+        "--password",
+        action="store",
+        default=None,
+        help="Password for authenticated tests"
+    )
+    parser.addoption(
+        "--mqtt-url",
+        action="store",
+        default="mqtt://localhost:1883",
+        help="MQTT broker URL"
+    )
 
 # ============================================================================
 # TEST ARTIFACT DIRECTORY
@@ -27,6 +69,7 @@ class CliConfig(BaseModel):
     auth_url: str
     compute_url: str
     store_url: str
+    mqtt_url: str
     username: str | None
     password: str | None
 
@@ -66,6 +109,7 @@ class AuthConfig(BaseModel):
     auth_url: str
     compute_url: str
     store_url: str
+    mqtt_url: str
     compute_auth_required: bool
     compute_guest_mode: bool
     store_guest_mode: bool

@@ -15,7 +15,7 @@ from .auth_models import (
     UserResponse,
     UserUpdateRequest,
 )
-from .server_config import ServerConfig
+from .server_pref import ServerPref
 
 
 class AuthClient:
@@ -39,17 +39,18 @@ class AuthClient:
     def __init__(
         self,
         base_url: str | None = None,
-        server_config: ServerConfig | None = None,
+        server_pref: ServerPref | None = None,
         timeout: float = 60.0,
     ) -> None:
         """Initialize auth client.
 
         Args:
-            base_url: Auth service URL (overrides server_config.auth_url)
-            server_config: Server configuration (default: from environment)
+            base_url: Auth service URL (overrides server_pref.auth_url)
+            server_pref: Server configuration (default: from environment)
             timeout: Request timeout in seconds
         """
-        config = server_config or ServerConfig.from_env()
+        # Get config for defaults (from parameter or environment)
+        config = server_pref or ServerPref.from_env()
         self.base_url: str = base_url or config.auth_url
         self.timeout: float = timeout
 

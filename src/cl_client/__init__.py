@@ -23,7 +23,7 @@ from .exceptions import (
 )
 from .models import JobResponse, OnJobResponseCallback, WorkerCapabilitiesResponse, WorkerCapability
 from .mqtt_monitor import MQTTJobMonitor
-from .server_config import ServerConfig
+from .server_pref import ServerPref
 from .session_manager import SessionManager
 from .store_manager import StoreManager
 from .store_models import (
@@ -40,7 +40,7 @@ __all__ = [
     "ComputeClient",
     # Configuration
     "ComputeClientConfig",
-    "ServerConfig",
+    "ServerPref",
     # Models
     "JobResponse",
     "OnJobResponseCallback",

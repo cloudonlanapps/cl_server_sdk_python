@@ -11,7 +11,7 @@ from pathlib import Path as PathlibPath
 import httpx
 import pytest
 
-from cl_client import ComputeClient, ServerConfig, SessionManager
+from cl_client import ComputeClient, ServerPref, SessionManager
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import (
@@ -43,38 +43,9 @@ async def get_server_info(url: str) -> ServerRootResponse:
 # ============================================================================
 
 
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """Add CLI options for integration tests (not required for unit tests)."""
-    parser.addoption(
-        "--auth-url",
-        action="store",
-        default=None,
-        help="Auth service URL (required for integration tests)"
-    )
-    parser.addoption(
-        "--compute-url",
-        action="store",
-        default=None,
-        help="Compute service URL (required for integration tests)"
-    )
-    parser.addoption(
-        "--store-url",
-        action="store",
-        default=None,
-        help="Store service URL (required for integration tests)"
-    )
-    parser.addoption(
-        "--username",
-        action="store",
-        default=None,
-        help="Username for authenticated integration tests"
-    )
-    parser.addoption(
-        "--password",
-        action="store",
-        default=None,
-        help="Password for authenticated integration tests"
-    )
+# ============================================================================
+# PYTEST CONFIGURATION
+# ============================================================================
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -109,6 +80,7 @@ def cli_config(request: pytest.FixtureRequest) -> CliConfig:
         auth_url=str(auth_url),
         compute_url=str(compute_url),
         store_url=str(store_url),
+        mqtt_url=str(request.config.getoption("--mqtt-url")),
         username=request.config.getoption("--username") or None,
         password=request.config.getoption("--password") or None,
     )
@@ -204,6 +176,7 @@ def auth_config(
         auth_url=cli_config.auth_url,
         compute_url=cli_config.compute_url,
         store_url=cli_config.store_url,
+        mqtt_url=cli_config.mqtt_url,
         compute_auth_required=compute_server_info.auth_required,
         compute_guest_mode=compute_server_info.guest_mode,
         store_guest_mode=store_server_info.guest_mode,
@@ -231,12 +204,13 @@ async def test_client(auth_config: AuthConfig):
     assert auth_config.username is not None
     assert auth_config.password is not None
 
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     await session.login(
         auth_config.username,
@@ -278,12 +252,13 @@ async def store_manager(auth_config: AuthConfig):
     assert auth_config.username is not None
     assert auth_config.password is not None
 
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url, # Error here? No, AuthConfig doesn't have it yet.
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     await session.login(
         auth_config.username,
@@ -458,16 +433,16 @@ async def cleanup_store_entities(
         compute_url = auth_config.compute_url
         store_url = auth_config.store_url
 
-        from cl_client.store_manager import StoreManager
-        from cl_client import ServerConfig, SessionManager
+        from cl_client import ServerPref, SessionManager
 
-        config = ServerConfig(
+        config = ServerPref(
             auth_url=auth_url,
             compute_url=compute_url,
             store_url=store_url,
+            mqtt_url=auth_config.mqtt_url,
         )
         
-        async with SessionManager(server_config=config) as session:
+        async with SessionManager(server_pref=config) as session:
             await session.login(username, password)
             async with session.create_store_manager() as mgr:
                 # 1. Try to delete specifically tracked entities first

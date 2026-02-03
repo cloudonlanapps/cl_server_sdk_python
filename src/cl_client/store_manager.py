@@ -16,7 +16,7 @@ import asyncio
 
 from .auth import JWTAuthProvider
 from .config import ComputeClientConfig
-from .server_config import ServerConfig
+from .server_pref import ServerPref
 from .store_client import StoreClient
 from .mqtt_monitor import MQTTJobMonitor, EntityStatusPayload, get_mqtt_monitor, release_mqtt_monitor
 from .types import UNSET, Unset
@@ -71,24 +71,18 @@ class StoreManager:
                 print(f"Error: {result.error}")
     """
 
-    def __init__(self, store_client: StoreClient):
+    def __init__(self, store_client: StoreClient, server_pref: ServerPref | None = None):
         """Initialize with a StoreClient.
 
         Args:
-        store_client: Configured StoreClient instance
-            config: Server configuration (needed for MQTT connection info)
+            store_client: Configured StoreClient instance
+            server_pref: Server configuration (needed for MQTT connection info)
         """
         self._store_client: StoreClient = store_client
         self._mqtt_monitor: MQTTJobMonitor | None = None
         
-        # Try to infer config from client or passed arg (not passed here though)
-        # We'll initialize MQTT monitor lazily or if config is available
-        # But __init__ signature here takes store_client only.
-        # We need config for MQTT broker details.
-        
-        # NOTE: Facades usually created via Guest/Authenticated factories which have config.
-        # We should pass config to __init__ if possible or set it.
-        self._config: ServerConfig | None = None
+        # Get config for defaults
+        self._config: ServerPref = server_pref or ServerPref.from_env()
         self._mqtt_subscriptions: dict[str, str] = {} # user_sub_id -> internal_sub_id
 
     def _get_mqtt_monitor(self) -> MQTTJobMonitor:
@@ -141,7 +135,7 @@ class StoreManager:
     @classmethod
     def authenticated(
         cls,
-        config: ServerConfig,
+        server_pref: ServerPref,
         get_cached_token: Callable[[], str] | None = None,
         get_valid_token_async: Callable[[], Awaitable[str]] | None = None,
         base_url: str | None = None,
@@ -159,13 +153,15 @@ class StoreManager:
         Returns:
             StoreManager instance configured with authentication
         """
-        url = base_url or config.store_url
+        url = base_url or server_pref.store_url
         auth_provider = JWTAuthProvider(
             get_cached_token=get_cached_token,
             get_valid_token_async=get_valid_token_async
         )
-        manager = cls(StoreClient(base_url=url, auth_provider=auth_provider, timeout=timeout))
-        manager._config = config
+        manager = cls(
+            StoreClient(base_url=url, auth_provider=auth_provider, timeout=timeout),
+            server_pref=server_pref
+        )
         return manager
 
     async def __aenter__(self) -> "StoreManager":

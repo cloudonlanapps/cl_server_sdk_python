@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING
 from .auth import JWTAuthProvider, NoAuthProvider
 from .auth_client import AuthClient
 from .auth_models import TokenResponse, UserResponse
-from .server_config import ServerConfig
+from .config import ComputeClientConfig
+from .server_pref import ServerPref
 
 if TYPE_CHECKING:
     from .compute_client import ComputeClient
@@ -67,18 +68,19 @@ class SessionManager:
     def __init__(
         self,
         base_url: str | None = None,
-        server_config: ServerConfig | None = None,
+        server_pref: ServerPref | None = None,
     ) -> None:
         """Initialize session manager.
 
         Args:
-            base_url: Auth service URL (overrides server_config.auth_url)
-            server_config: Server configuration (default: from environment)
+            base_url: Auth service URL (overrides server_pref.auth_url)
+            server_pref: Server configuration (default: from environment)
         """
-        self._config: ServerConfig = server_config or ServerConfig.from_env()
+        self._config: ServerPref = server_pref or ServerPref.from_env()
         self._auth_client: AuthClient = AuthClient(
             base_url=base_url,
-            server_config=self._config,
+            server_pref=self._config,
+            timeout=ComputeClientConfig.DEFAULT_TIMEOUT,
         )
 
         # Session state
@@ -87,8 +89,8 @@ class SessionManager:
         self._credentials: tuple[str, str] | None = None
 
     @property
-    def _server_config(self) -> ServerConfig:
-        """Get server configuration (for use by client factories)."""
+    def server_pref(self) -> ServerPref:
+        """Get the current server configuration."""
         return self._config
 
     @property
@@ -261,34 +263,11 @@ class SessionManager:
     # Client Factories
     # ========================================================================
 
-    def create_compute_client(self) -> "ComputeClient":
-        """Create ComputeClient with appropriate authentication.
-
-        Creates a ComputeClient pre-configured with:
-        - JWTAuthProvider if authenticated (with SessionManager integration)
-        - NoAuthProvider if guest mode
-
-        The created client will use this SessionManager for automatic token
-        refresh when making API calls.
+    def create_compute_client(self, timeout: float | None = None) -> "ComputeClient":
+        """Create a ComputeClient using this session's configuration and auth.
 
         Returns:
-            Pre-configured ComputeClient instance
-
-        Example (Authenticated):
-            session = SessionManager()
-            await session.login("user", "pass")
-
-            # Client uses JWT auth with auto-refresh
-            client = session.create_compute_client()
-            job = await client.clip_embedding.embed_image(...)
-
-        Example (Guest mode):
-            session = SessionManager()
-            # No login - guest mode
-
-            # Client uses no-auth mode
-            client = session.create_compute_client()
-            job = await client.clip_embedding.embed_image(...)
+            ComputeClient instance configured with this session's auth
         """
         # Import here to avoid circular dependency
         from .compute_client import ComputeClient
@@ -308,43 +287,15 @@ class SessionManager:
             base_url=self._config.compute_url,
             mqtt_url=self._config.mqtt_url,
             auth_provider=auth_provider,
+            server_pref=self.server_pref,
+            timeout=timeout,
         )
 
     def create_store_manager(self, timeout: float = 30.0) -> "StoreManager":
-        """Create StoreManager with authentication from this session.
-
-        Creates a StoreManager pre-configured with authentication from this
-        SessionManager. Requires prior authentication via login().
-
-        Args:
-            timeout: Request timeout in seconds (default: 30.0)
+        """Create a StoreManager using this session's configuration and auth.
 
         Returns:
-            Pre-configured StoreManager instance
-
-        Raises:
-            RuntimeError: If not authenticated (call login() first)
-
-        Example (Authenticated):
-            session = SessionManager()
-            await session.login("user", "password")
-
-            # Create store manager with auth
-            store = session.create_store_manager()
-
-            # Upload image
-            result = await store.create_entity(
-                label="My Photo",
-                image_path=Path("photo.jpg")
-            )
-            if result.is_success:
-                print(f"Created entity ID: {result.data.id}")
-
-        Example (Guest mode - read-only):
-            # For guest mode, use StoreManager.guest() instead
-            from cl_client import StoreManager
-            store = StoreManager.guest()
-            result = await store.list_entities()
+            StoreManager instance configured with this session's auth
         """
         # Import here to avoid circular dependency
         from .store_manager import StoreManager
@@ -353,10 +304,9 @@ class SessionManager:
             raise RuntimeError("Not authenticated. Call login() first.")
 
         return StoreManager.authenticated(
-            config=self._config,
+            server_pref=self.server_pref,
             get_cached_token=self.get_token,
             get_valid_token_async=self.get_valid_token,
-            base_url=self._config.store_url,
             timeout=timeout,
         )
 

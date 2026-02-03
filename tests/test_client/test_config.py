@@ -15,8 +15,7 @@ def test_default_values():
 
 def test_mqtt_config():
     """Test MQTT configuration values."""
-    assert ComputeClientConfig.MQTT_BROKER_HOST == "localhost"
-    assert ComputeClientConfig.MQTT_BROKER_PORT == 1883
+    assert ComputeClientConfig.MQTT_URL == "mqtt://localhost:1883"
     assert ComputeClientConfig.MQTT_CAPABILITY_TOPIC_PREFIX == "inference/workers"
     assert ComputeClientConfig.MQTT_JOB_EVENTS_TOPIC == "inference/events"
 

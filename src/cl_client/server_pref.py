@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class ServerConfig:
+class ServerPref:
     """Configuration for CL Server service URLs.
 
     Centralizes URL management for auth, compute, and future services.
@@ -41,8 +41,8 @@ class ServerConfig:
     mqtt_url: str = "mqtt://localhost:1883"
 
     @classmethod
-    def from_env(cls) -> "ServerConfig":
-        """Create ServerConfig from environment variables.
+    def from_env(cls) -> "ServerPref":
+        """Create ServerPref from environment variables.
 
         Loads configuration from environment variables with fallback to defaults.
         This allows easy configuration in different deployment environments without
@@ -55,7 +55,7 @@ class ServerConfig:
             MQTT_URL: MQTT broker URL (default: mqtt://localhost:1883)
 
         Returns:
-            ServerConfig with values from environment or defaults
+            ServerPref with values from environment or defaults
 
         Example:
             # Set environment variables
@@ -63,7 +63,7 @@ class ServerConfig:
             os.environ['COMPUTE_URL'] = 'https://compute.prod.example.com'
 
             # Load configuration
-            config = ServerConfig.from_env()
+            config = ServerPref.from_env()
             print(config.auth_url)  # https://auth.prod.example.com
         """
         # Get default instance for fallback values

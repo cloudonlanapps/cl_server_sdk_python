@@ -324,22 +324,20 @@ class TestSessionManagerComputeClient:
         assert client.base_url == session._config.compute_url
 
     def test_create_compute_client_uses_config(self):
-        """Test SessionManager stores and uses ServerConfig."""
-        from cl_client.server_config import ServerConfig
+        """Test SessionManager stores and uses ServerPref."""
+        from cl_client.server_pref import ServerPref
 
-        config = ServerConfig(
+        config = ServerPref(
             compute_url="https://custom-compute.example.com",
-            mqtt_broker="custom-broker",
-            mqtt_port=8883,
+            mqtt_url="mqtt://custom-broker:8883",
         )
 
-        session = SessionManager(server_config=config)
+        session = SessionManager(server_pref=config)
 
         # Verify config is stored
         assert session._config == config
         assert session._config.compute_url == "https://custom-compute.example.com"
-        assert session._config.mqtt_broker == "custom-broker"
-        assert session._config.mqtt_port == 8883
+        assert session._config.mqtt_url == "mqtt://custom-broker:8883"
 
 
 class TestSessionManagerContextManager:

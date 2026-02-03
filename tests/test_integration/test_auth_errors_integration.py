@@ -37,6 +37,7 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_config: A
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
         compute_auth_required=auth_config.compute_auth_required,
         compute_guest_mode=auth_config.compute_guest_mode,
         store_guest_mode=auth_config.store_guest_mode,
@@ -84,6 +85,7 @@ async def test_invalid_token_rejected(test_image: Path, auth_config: AuthConfig)
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
         compute_auth_required=auth_config.compute_auth_required,
         compute_guest_mode=auth_config.compute_guest_mode,
         store_guest_mode=auth_config.store_guest_mode,
@@ -132,6 +134,7 @@ async def test_malformed_token_rejected(test_image: Path, auth_config: AuthConfi
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
         store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
         compute_auth_required=auth_config.compute_auth_required,
         compute_guest_mode=auth_config.compute_guest_mode,
         store_guest_mode=auth_config.store_guest_mode,
@@ -177,7 +180,7 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_config: AuthCo
     if auth_config.mode == "no-auth":
         # In no-auth mode, auth service still requires authentication
         # Try to access admin endpoint without auth
-        from cl_client import ServerConfig
+        from cl_client import ServerPref
 
         # Try to create a user without authentication
         async with httpx.AsyncClient() as client:
@@ -195,17 +198,19 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_config: AuthCo
             assert response.status_code == 401
         return
 
-    from cl_client import ServerConfig
+    from cl_client import ServerPref
 
     # Create server config with correct URLs
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=auth_config.auth_url,
         compute_url=auth_config.compute_url,
+        store_url=auth_config.store_url,
+        mqtt_url=auth_config.mqtt_url,
     )
 
     # First, login as admin to create a regular user
-    admin_session = SessionManager(server_config=config)
-    await admin_session.login("admin", "admin")
+    admin_session = SessionManager(server_pref=config)
+    await admin_session.login(auth_config.username, auth_config.password)
 
     try:
         # Create a non-admin user
@@ -226,7 +231,7 @@ async def test_non_admin_user_forbidden_from_admin_endpoints(auth_config: AuthCo
         )
 
         # Now login as the non-admin user
-        user_session = SessionManager(server_config=config)
+        user_session = SessionManager(server_pref=config)
         await user_session.login("testuser_nonadmin", "testpass123")
 
         try:

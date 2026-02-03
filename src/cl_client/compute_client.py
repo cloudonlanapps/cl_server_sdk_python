@@ -22,7 +22,7 @@ from cl_client.plugins.base import ClientProtocol
 from .auth import AuthProvider, NoAuthProvider
 from .config import ComputeClientConfig
 from .mqtt_monitor import MQTTJobMonitor, get_mqtt_monitor, release_mqtt_monitor
-from .server_config import ServerConfig
+from .server_pref import ServerPref
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -62,16 +62,16 @@ class ComputeClient(ClientProtocol):
         timeout: float | None = None,
         mqtt_url: str | None = None,
         auth_provider: AuthProvider | None = None,
-        server_config: ServerConfig | None = None,
+        server_pref: ServerPref | None = None,
     ) -> None:
         """Initialize compute client.
 
         Args:
-            base_url: Server base URL (overrides server_config.compute_url)
+            base_url: Server base URL (overrides server_pref.compute_url)
             timeout: Request timeout in seconds (default from ComputeClientConfig)
-            mqtt_url: MQTT broker URL (overrides server_config.mqtt_url)
+            mqtt_url: MQTT broker URL (overrides server_pref.mqtt_url)
             auth_provider: Authentication provider (default: NoAuthProvider)
-            server_config: Server configuration (default: from environment)
+            server_pref: Server configuration (default: from environment)
 
         Example (Simple):
             client = ComputeClient()  # Uses defaults
@@ -81,11 +81,11 @@ class ComputeClient(ClientProtocol):
             client = ComputeClient(auth_provider=auth)
 
         Example (Custom config):
-            config = ServerConfig(compute_url="https://api.example.com")
-            client = ComputeClient(server_config=config)
+            config = ServerPref(compute_url="https://api.example.com")
+            client = ComputeClient(server_pref=config)
         """
         # Get config for defaults (from parameter or environment)
-        config = server_config or ServerConfig.from_env()
+        config = server_pref or ServerPref.from_env()
 
         # Use explicit parameters if provided, otherwise fall back to config
         self.base_url: str = base_url or config.compute_url
@@ -135,7 +135,7 @@ class ComputeClient(ClientProtocol):
 
         headers = await self._get_request_headers()
         response = await self._session.put(
-            f"{self.base_url}/admin/config/guest-mode",
+            f"{self.base_url}/admin/pref/guest-mode",
             data=data,  # Form data, not JSON
             headers=headers,
         )

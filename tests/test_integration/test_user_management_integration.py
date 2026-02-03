@@ -20,7 +20,7 @@ from pathlib import Path as PathlibPath
 import httpx
 import pytest
 
-from cl_client import ServerConfig
+from cl_client import ServerPref
 from cl_client.auth_models import UserCreateRequest, UserUpdateRequest
 from cl_client.session_manager import SessionManager
 
@@ -38,11 +38,11 @@ async def test_create_user_success(auth_config: AuthConfig, is_no_auth: bool):
     In JWT mode: Verify admin can create users, non-admin gets 403
     """
     # Create session with credentials from auth_config
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -135,11 +135,11 @@ async def test_list_users_success(auth_config: AuthConfig, is_no_auth: bool):
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can list users, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -194,11 +194,11 @@ async def test_get_user_success(auth_config: AuthConfig, is_no_auth: bool):
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can get users, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -276,11 +276,11 @@ async def test_update_user_permissions(auth_config: AuthConfig, is_no_auth: bool
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update permissions, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -363,11 +363,11 @@ async def test_update_user_password(auth_config: AuthConfig, is_no_auth: bool):
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update password, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -417,7 +417,7 @@ async def test_update_user_password(auth_config: AuthConfig, is_no_auth: bool):
             )
 
             # Try to login with new password
-            user_session = SessionManager(server_config=config)
+            user_session = SessionManager(server_pref=config)
             await user_session.login("test_password_user", "newpassword456")
 
             # Verify login succeeded
@@ -454,11 +454,11 @@ async def test_update_user_active_status(auth_config: AuthConfig, is_no_auth: bo
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can update status, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -540,11 +540,11 @@ async def test_delete_user_success(auth_config: AuthConfig, is_no_auth: bool):
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can delete users, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:
@@ -638,11 +638,11 @@ async def test_list_users_with_pagination(
     In no-auth mode: Verify auth service rejects unauthenticated requests (401)
     In JWT mode: Verify admin can paginate users, non-admin gets 403
     """
-    config = ServerConfig(
+    config = ServerPref(
         auth_url=str(auth_config.auth_url),
         compute_url=str(auth_config.compute_url),
     )
-    session = SessionManager(server_config=config)
+    session = SessionManager(server_pref=config)
 
     # In no-auth mode, verify auth service rejects unauthenticated admin requests
     if is_no_auth:

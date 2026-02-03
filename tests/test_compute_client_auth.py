@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from cl_client.compute_client import ComputeClient
 from cl_client.auth import AuthProvider
-from cl_client.server_config import ServerConfig
+from cl_client.server_pref import ServerPref
 
 @pytest.mark.asyncio
 async def test_dynamic_header_updates():
@@ -25,11 +25,10 @@ async def test_dynamic_header_updates():
     client = ComputeClient(
         base_url="http://test.local",
         auth_provider=mock_auth,
-        server_config=ServerConfig(
+        server_pref=ServerPref(
             auth_url="http://auth.local",
             compute_url="http://test.local",
-            mqtt_broker="localhost",
-            mqtt_port=1883
+            mqtt_url="mqtt://localhost:1883"
         )
     )
     
