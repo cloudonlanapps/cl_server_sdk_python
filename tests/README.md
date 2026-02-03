@@ -114,10 +114,10 @@ Integration tests adapt behavior based on **auth mode** (determined at runtime f
 
 ### Auth Modes
 
-| Mode | Description | Requirements |
-|------|-------------|--------------|
-| **auth** | Authenticated via username/password | `--username` and `--password` provided |
-| **no-auth** | No authentication | No credentials provided |
+| Mode        | Description                         | Requirements                           |
+| ----------- | ----------------------------------- | -------------------------------------- |
+| **auth**    | Authenticated via username/password | `--username` and `--password` provided |
+| **no-auth** | No authentication                   | No credentials provided                |
 
 ### Permission Model
 
@@ -370,7 +370,7 @@ Integration tests require **test media files** (images, videos):
 - Images: `test_image_1920x1080.jpg`, `test_exif_rich.jpg`, `test_face_single.jpg`, etc.
 - Videos: `test_video_1080p_10s.mp4`, `test_video_720p_5s.mp4`
 
-**Location:** `TEST_VECTORS_DIR` environment variable (defaults to `/Users/anandasarangaram/Work/cl_server_test_media`)
+**Location:** `TEST_VECTORS_DIR` environment variable (defaults to `~/cl_server_test_media`)
 
 If media not found, integration tests fail with:
 ```
