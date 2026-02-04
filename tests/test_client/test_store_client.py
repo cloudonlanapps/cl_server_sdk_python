@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+import pytest_asyncio
 
 from cl_client.auth import NoAuthProvider
 from cl_client.store_client import StoreClient
@@ -21,7 +22,7 @@ def mock_httpx_client():
     return AsyncMock(spec=httpx.AsyncClient)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def store_client(mock_httpx_client):
     """Create StoreClient with mocked httpx client."""
     client = StoreClient(base_url="http://localhost:8001")

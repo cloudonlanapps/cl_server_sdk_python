@@ -10,6 +10,7 @@ from pathlib import Path as PathlibPath
 
 import httpx
 import pytest
+import pytest_asyncio
 
 from cl_client import ComputeClient, ServerPref, SessionManager
 
@@ -191,7 +192,7 @@ def auth_config(
 # ============================================================================
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_client(auth_config: AuthConfig):
     """Create ComputeClient with auth based on config."""
     if not auth_config.username:
@@ -226,13 +227,13 @@ async def test_client(auth_config: AuthConfig):
     await session.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(test_client: ComputeClient) -> ComputeClient:
     """Backward compatibility alias"""
     return test_client
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def store_manager(auth_config: AuthConfig):
     """Create StoreManager with auth based on config."""
     from cl_client.store_manager import StoreManager
@@ -405,7 +406,7 @@ def test_video_720p(media_dir: Path) -> Path:
 # ============================================================================
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest_asyncio.fixture(scope="function", autouse=True)
 async def cleanup_store_entities(
     request: pytest.FixtureRequest,
     auth_config,  # AuthConfig Pydantic model from parent conftest
