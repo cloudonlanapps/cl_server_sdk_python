@@ -55,7 +55,7 @@ packages = ["src/cl_client"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "admin_only: marks tests as requiring admin permissions (deselect with '-m \"not admin_only\"')",
