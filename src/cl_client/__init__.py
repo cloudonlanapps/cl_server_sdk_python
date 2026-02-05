@@ -31,7 +31,7 @@ from .store_models import (
     EntityListResponse,
     EntityPagination,
     EntityVersion,
-    StoreConfig,
+    StorePref,
     StoreOperationResult,
 )
 
@@ -57,7 +57,7 @@ __all__ = [
     "EntityListResponse",
     "EntityPagination",
     "EntityVersion",
-    "StoreConfig",
+    "StorePref",
     "StoreOperationResult",
     # Exceptions
     "ComputeClientError",

@@ -8,7 +8,7 @@ import pytest_asyncio
 
 from cl_client.auth import NoAuthProvider
 from cl_client.store_client import StoreClient
-from cl_client.store_models import Entity, EntityListResponse, StoreConfig
+from cl_client.store_models import Entity, EntityListResponse, StorePref
 from cl_client.intelligence_models import (
     FaceResponse,
     KnownPersonResponse,
@@ -349,8 +349,8 @@ class TestStoreClientAdminOperations:
     """Tests for admin operations."""
 
     @pytest.mark.asyncio
-    async def test_get_config(self, store_client, mock_httpx_client):
-        """Test getting store configuration."""
+    async def test_get_pref(self, store_client, mock_httpx_client):
+        """Test getting store preferences."""
         mock_response = Mock()
         mock_response.json.return_value = {
             "guest_mode": False,
@@ -360,9 +360,9 @@ class TestStoreClientAdminOperations:
         mock_response.raise_for_status = Mock()
         mock_httpx_client.get.return_value = mock_response
 
-        result = await store_client.get_config()
+        result = await store_client.get_pref()
 
-        assert isinstance(result, StoreConfig)
+        assert isinstance(result, StorePref)
         assert result.guest_mode is False
         assert result.updated_by == "admin"
 
@@ -372,7 +372,7 @@ class TestStoreClientAdminOperations:
         mock_put_response = Mock()
         mock_put_response.raise_for_status = Mock()
 
-        # Mock GET response for get_config() call after PUT
+        # Mock GET response for get_pref() call after PUT
         mock_get_response = Mock()
         mock_get_response.json.return_value = {
             "guest_mode": True,
@@ -386,7 +386,7 @@ class TestStoreClientAdminOperations:
 
         result = await store_client.update_guest_mode(guest_mode=True)
 
-        assert isinstance(result, StoreConfig)
+        assert isinstance(result, StorePref)
         assert result.guest_mode is True
 
         # Verify multipart form data

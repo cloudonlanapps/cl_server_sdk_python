@@ -17,8 +17,8 @@ from cl_client.store_models import (
     Entity,
     EntityListResponse,
     EntityVersion,
+    StorePref,
     RootResponse,
-    StoreConfig,
     AuditReport,
     CleanupReport,
 )
@@ -101,7 +101,7 @@ class StoreClient:
     # Health check
 
     async def health_check(self) -> RootResponse:
-        """Get service health status and configuration.
+        """Get service health status and preferences.
 
         Returns:
             RootResponse with service status, version, and guest mode setting
@@ -549,11 +549,11 @@ class StoreClient:
 
     # Admin operations
 
-    async def get_config(self) -> StoreConfig:
-        """Get store configuration (admin only).
+    async def get_pref(self) -> StorePref:
+        """Get store preferences (admin only).
 
         Returns:
-            StoreConfig
+            StorePref
 
         Raises:
             httpx.HTTPStatusError: If the request fails
@@ -562,20 +562,20 @@ class StoreClient:
             raise RuntimeError("Client not initialized. Use 'async with' context manager.")
 
         response = await self._client.get(
-            f"{self._base_url}/admin/config",
+            f"{self._base_url}/admin/pref",
             headers=await self._get_headers(),
         )
         _ = response.raise_for_status()
-        return StoreConfig.model_validate(response.json())
+        return StorePref.model_validate(response.json())
 
-    async def update_guest_mode(self, guest_mode: bool) -> StoreConfig:
+    async def update_guest_mode(self, guest_mode: bool) -> StorePref:
         """Update guest mode setting (admin only).
 
         Args:
             guest_mode: New guest mode status
 
         Returns:
-            Updated StoreConfig
+            Updated StorePref
 
         Raises:
             httpx.HTTPStatusError: If the request fails
@@ -586,11 +586,11 @@ class StoreClient:
         data = {"guest_mode": str(guest_mode).lower()}
 
         _ = await self._client.put(
-            f"{self._base_url}/admin/config/guest-mode",
+            f"{self._base_url}/admin/pref/guest-mode",
             data=data,
             headers=await self._get_headers(),
         )
-        return await self.get_config()
+        return await self.get_pref()
     
     async def get_m_insight_status(self) -> dict[str, object]:
         """Get MInsight process status (admin only).

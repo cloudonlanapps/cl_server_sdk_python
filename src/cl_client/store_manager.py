@@ -24,8 +24,8 @@ from .store_models import (
     Entity,
     EntityListResponse,
     EntityVersion,
-    StoreConfig,
     StoreOperationResult,
+    StorePref,
     AuditReport,
     CleanupReport,
 )
@@ -653,44 +653,44 @@ class StoreManager:
 
     # Admin operations
 
-    async def get_config(self) -> StoreOperationResult[StoreConfig]:
-        """Get store configuration (admin only).
+    async def get_pref(self) -> StoreOperationResult[StorePref]:
+        """Get store preferences (admin only).
 
         Requires admin role.
 
         Returns:
-            StoreOperationResult containing StoreConfig or error
+            StoreOperationResult containing StorePref or error
         """
         try:
-            config = await self._store_client.get_config()
-            return StoreOperationResult[StoreConfig](
-                success="Configuration retrieved successfully",
-                data=config,
+            pref = await self._store_client.get_pref()
+            return StoreOperationResult[StorePref](
+                success="Preferences retrieved successfully",
+                data=pref,
             )
         except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
+            return cast(StoreOperationResult[StorePref], self._handle_error(e))
         except Exception as e:
-            return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
+            return StoreOperationResult[StorePref](error=f"Unexpected error: {str(e)}")
 
-    async def update_guest_mode(self, guest_mode: bool) -> StoreOperationResult[StoreConfig]:
-        """Update guest mode configuration (admin only).
+    async def update_guest_mode(self, guest_mode: bool) -> StoreOperationResult[StorePref]:
+        """Update guest mode setting (admin only).
 
         Args:
-            guest_mode: Whether to enable guest mode
+            guest_mode: New guest mode status
 
         Returns:
-            StoreOperationResult with success status
+            StoreOperationResult with updated StorePref or error
         """
         try:
-            result = await self._store_client.update_guest_mode(guest_mode=guest_mode)
-            return StoreOperationResult[StoreConfig](
-                success="Guest mode configuration updated successfully",
-                data=result,
+            pref = await self._store_client.update_guest_mode(guest_mode=guest_mode)
+            return StoreOperationResult[StorePref](
+                success="Guest mode preference updated successfully",
+                data=pref,
             )
         except httpx.HTTPStatusError as e:
-            return cast(StoreOperationResult[StoreConfig], self._handle_error(e))
+            return cast(StoreOperationResult[StorePref], self._handle_error(e))
         except Exception as e:
-            return StoreOperationResult[StoreConfig](error=f"Unexpected error: {str(e)}")
+            return StoreOperationResult[StorePref](error=f"Unexpected error: {str(e)}")
 
     async def get_m_insight_status(self) -> StoreOperationResult[dict[str, object]]:
         """Get MInsight process status (admin only).

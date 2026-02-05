@@ -9,8 +9,8 @@ from cl_client.store_models import (
     EntityListResponse,
     EntityPagination,
     EntityVersion,
-    StoreConfig,
     StoreOperationResult,
+    StorePref,
 )
 
 
@@ -153,31 +153,32 @@ class TestEntityVersion:
         assert version.label == "Original Label"
 
 
-class TestStoreConfig:
-    """Tests for StoreConfig model."""
+class TestStorePref:
+    """Tests for StorePref model."""
 
-    def test_store_config_creation(self):
-        """Test creating store config."""
-        config = StoreConfig(
-            guest_mode=False,
-            updated_at=1704067200000,
+    def test_store_pref_creation(self) -> None:
+        """Test creating a StorePref instance."""
+        pref = StorePref(
+            guest_mode=True,
+            updated_at=1625097600000,
             updated_by="admin",
         )
+        assert pref.guest_mode is True
+        assert pref.updated_at == 1625097600000
+        assert pref.updated_by == "admin"
 
-        assert config.guest_mode is False
-        assert config.updated_at == 1704067200000
-        assert config.updated_by == "admin"
-
-    def test_store_config_datetime(self):
-        """Test datetime conversion."""
-        config = StoreConfig(
-            guest_mode=True,
-            updated_at=1704067200000,
+    def test_store_pref_datetime(self) -> None:
+        """Test datetime conversion for StorePref."""
+        pref = StorePref(
+            guest_mode=False,
+            updated_at=1625097600000,
+            updated_by="user1",
         )
-
-        assert config.updated_at_datetime is not None
-        assert isinstance(config.updated_at_datetime, datetime)
-        assert config.updated_at_datetime.year == 2024
+        dt = pref.updated_at_datetime
+        assert dt is not None
+        assert dt.year == 2021
+        assert dt.month == 7
+        assert dt.day == 1
 
 
 class TestStoreOperationResult:

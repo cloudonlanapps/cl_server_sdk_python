@@ -12,7 +12,7 @@ from cl_client.store_models import (
     EntityListResponse,
     EntityPagination,
     EntityVersion,
-    StoreConfig,
+    StorePref,
 )
 from cl_client.types import UNSET
 
@@ -337,37 +337,29 @@ class TestStoreManagerAdminOperations:
     """Tests for admin operations."""
 
     @pytest.mark.asyncio
-    async def test_get_config_success(self, store_manager, mock_store_client):
-        """Test getting store configuration."""
-        expected_config = StoreConfig(
-            guest_mode=False,
-            updated_at=1704067200000,
-            updated_by="admin",
-        )
-        mock_store_client.get_config.return_value = expected_config
+    async def test_get_pref(self, store_manager, mock_store_client):
+        """Test get_pref."""
+        expected_pref = StorePref(guest_mode=True)
+        mock_store_client.get_pref.return_value = expected_pref
 
-        result = await store_manager.get_config()
+        result = await store_manager.get_pref()
 
         assert result.is_success
-        assert result.data == expected_config
-        assert result.success == "Configuration retrieved successfully"
-        mock_store_client.get_config.assert_called_once()
+        assert result.data == expected_pref
+        assert result.success == "Preferences retrieved successfully"
+        mock_store_client.get_pref.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_guest_mode_success(self, store_manager, mock_store_client):
-        """Test updating guest mode configuration."""
-        expected_config = StoreConfig(
-            guest_mode=True,
-            updated_at=1704067200000,
-            updated_by="admin",
-        )
-        mock_store_client.update_guest_mode.return_value = expected_config
+    async def test_update_guest_mode(self, store_manager, mock_store_client):
+        """Test update_guest_mode."""
+        expected_pref = StorePref(guest_mode=True)
+        mock_store_client.update_guest_mode.return_value = expected_pref
 
         result = await store_manager.update_guest_mode(guest_mode=True)
 
         assert result.is_success
-        assert result.data == expected_config
-        assert result.success == "Guest mode configuration updated successfully"
+        assert result.data == expected_pref
+        assert result.success == "Guest mode preference updated successfully"
         mock_store_client.update_guest_mode.assert_called_once_with(guest_mode=True)
 
 

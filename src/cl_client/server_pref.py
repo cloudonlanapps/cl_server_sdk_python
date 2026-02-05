@@ -19,17 +19,17 @@ class ServerPref:
     customized for production environments.
 
     Example:
-        # Default configuration (localhost)
-        config = ServerConfig()
+        # Default preferences (localhost)
+        pref = ServerPref()
 
-        # Custom configuration
-        config = ServerConfig(
+        # Custom preferences
+        pref = ServerPref(
             auth_url="https://auth.example.com",
             compute_url="https://compute.example.com"
         )
 
         # From environment variables
-        config = ServerConfig.from_env()
+        pref = ServerPref.from_env()
     """
 
     # Service URLs

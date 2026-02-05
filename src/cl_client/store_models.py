@@ -174,19 +174,14 @@ class EntityVersion(BaseModel):
     # the most common ones above. Additional fields can be accessed via dict access.
 
 
-class StoreConfig(BaseModel):
-    """Store configuration settings."""
+class StorePref(BaseModel):
+    """Store preference settings."""
 
     guest_mode: bool = Field(
-        ...,
-        description="Whether guest mode is enabled (true = no authentication required)",
+        default=True, description="True if anyone can read entities without auth"
     )
-    updated_at: int | None = Field(
-        default=None, description="Last configuration update (milliseconds since epoch)"
-    )
-    updated_by: str | None = Field(
-        default=None, description="User who last updated the configuration"
-    )
+    updated_at: int | None = Field(default=None, description="Last preference update (ms)")
+    updated_by: str | None = Field(default=None, description="User who last updated preferences")
 
     @property
     def updated_at_datetime(self) -> datetime | None:
