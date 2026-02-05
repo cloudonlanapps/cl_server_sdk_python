@@ -429,8 +429,10 @@ async def test_media_thumbnail_generate(mock_compute_client, temp_image_file):
 
 def test_compute_client_lazy_load_clip_embedding():
     """Test lazy loading of ClipEmbeddingClient."""
-    with patch("cl_client.compute_client.MQTTJobMonitor"):
+    with patch("cl_client.compute_client.get_mqtt_monitor") as mock_mqtt:
         with patch("cl_client.compute_client.httpx.AsyncClient"):
+            # Mock the get_mqtt_monitor to return a mock MQTTJobMonitor
+            mock_mqtt.return_value = MagicMock()
             client = ComputeClient()
 
             # Access plugin property
@@ -445,8 +447,10 @@ def test_compute_client_lazy_load_clip_embedding():
 
 def test_compute_client_lazy_load_all_plugins():
     """Test lazy loading of all 9 plugins."""
-    with patch("cl_client.compute_client.MQTTJobMonitor"):
+    with patch("cl_client.compute_client.get_mqtt_monitor") as mock_mqtt:
         with patch("cl_client.compute_client.httpx.AsyncClient"):
+            # Mock the get_mqtt_monitor to return a mock MQTTJobMonitor
+            mock_mqtt.return_value = MagicMock()
             client = ComputeClient()
 
             # Test all plugin properties

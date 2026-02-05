@@ -47,7 +47,7 @@ async def test_unauthenticated_request_rejected(test_image: Path, auth_config: A
     )
 
     # Create client without authentication (no token)
-    async with ComputeClient(base_url=auth_config.compute_url) as client:
+    async with ComputeClient(base_url=auth_config.compute_url, mqtt_url=auth_config.mqtt_url) as client:
         if should_succeed(no_auth_config, operation_type="plugin"):
             # Should succeed and return a job
             job = await client.clip_embedding.embed_image(
@@ -96,7 +96,7 @@ async def test_invalid_token_rejected(test_image: Path, auth_config: AuthConfig)
 
     # Create client with invalid token
     invalid_auth = JWTAuthProvider(token="invalid.token.here")
-    async with ComputeClient(base_url=auth_config.compute_url, auth_provider=invalid_auth) as client:
+    async with ComputeClient(base_url=auth_config.compute_url, mqtt_url=auth_config.mqtt_url, auth_provider=invalid_auth) as client:
         if should_succeed(no_auth_config, operation_type="plugin"):
             # Should succeed and return a job
             job = await client.clip_embedding.embed_image(
@@ -145,7 +145,7 @@ async def test_malformed_token_rejected(test_image: Path, auth_config: AuthConfi
 
     # Create client with malformed token (not even JWT format)
     malformed_auth = JWTAuthProvider(token="not-a-jwt-token")
-    async with ComputeClient(base_url=auth_config.compute_url, auth_provider=malformed_auth) as client:
+    async with ComputeClient(base_url=auth_config.compute_url, mqtt_url=auth_config.mqtt_url, auth_provider=malformed_auth) as client:
         if should_succeed(no_auth_config, operation_type="plugin"):
             # Should succeed and return a job
             job = await client.clip_embedding.embed_image(

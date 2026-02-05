@@ -304,11 +304,13 @@ class TestSessionManagerComputeClient:
         session = SessionManager()
         session._current_token = token
 
-        client = session.create_compute_client()
+        with patch("cl_client.compute_client.get_mqtt_monitor") as mock_mqtt:
+            mock_mqtt.return_value = Mock()
+            client = session.create_compute_client()
 
-        assert client is not None
-        assert isinstance(client.auth, JWTAuthProvider)
-        assert client.base_url == session._config.compute_url
+            assert client is not None
+            assert isinstance(client.auth, JWTAuthProvider)
+            assert client.base_url == session._config.compute_url
 
     def test_create_compute_client_guest_mode(self):
         """Test create_compute_client() in guest mode."""
@@ -317,11 +319,13 @@ class TestSessionManagerComputeClient:
         # Not authenticated
         assert not session.is_authenticated()
 
-        client = session.create_compute_client()
+        with patch("cl_client.compute_client.get_mqtt_monitor") as mock_mqtt:
+            mock_mqtt.return_value = Mock()
+            client = session.create_compute_client()
 
-        assert client is not None
-        assert isinstance(client.auth, NoAuthProvider)
-        assert client.base_url == session._config.compute_url
+            assert client is not None
+            assert isinstance(client.auth, NoAuthProvider)
+            assert client.base_url == session._config.compute_url
 
     def test_create_compute_client_uses_config(self):
         """Test SessionManager stores and uses ServerPref."""
@@ -433,8 +437,10 @@ class TestSessionManagerIntegration:
                     assert token == refreshed_token
 
                 # Step 4: Create compute client
-                client = session.create_compute_client()
-                assert isinstance(client.auth, JWTAuthProvider)
+                with patch("cl_client.compute_client.get_mqtt_monitor") as mock_mqtt:
+                    mock_mqtt.return_value = Mock()
+                    client = session.create_compute_client()
+                    assert isinstance(client.auth, JWTAuthProvider)
 
                 # Step 5: Logout
                 await session.logout()
