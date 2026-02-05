@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from cl_client import StoreManager
 from loguru import logger
-
+from tests.test_utils import create_unique_copy
 TEST_VECTORS_DIR = Path(
     os.getenv("TEST_VECTORS_DIR", str(Path.home() / "cl_server_test_media"))
 )
@@ -34,7 +34,7 @@ async def test_full_embedding_flow(
     tmp_path: Path,
 ):
     """Verify that uploaded images get all embeddings and face processing."""
-    from .test_utils import create_unique_copy
+    
     
     # Increase timeout for heavy models cold start
     TIMEOUT = 300.0

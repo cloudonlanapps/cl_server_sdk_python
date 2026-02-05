@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path as PathlibPath
 
 import pytest
-from .test_utils import create_unique_copy
+from tests.test_utils import create_unique_copy
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
 from conftest import AuthConfig, should_succeed

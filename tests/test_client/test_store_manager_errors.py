@@ -3,7 +3,7 @@ import httpx
 from unittest.mock import AsyncMock, MagicMock
 from cl_client.store_manager import StoreManager
 from cl_client.store_client import StoreClient
-from cl_client.store_models import StoreOperationResult
+
 
 @pytest.fixture
 def mock_store_client():
@@ -21,7 +21,7 @@ def create_http_error(status_code, detail="Error"):
     return httpx.HTTPStatusError("Error", request=request, response=response)
 
 @pytest.mark.asyncio
-async def test_store_manager_http_error_handling(store_manager, mock_store_client):
+async def test_store_manager_http_error_handling(store_manager:StoreManager, mock_store_client):
     """Test StoreManager error handling for various HTTP status codes."""
     # Mock list_entities to raise 401
     mock_store_client.list_entities = AsyncMock(side_effect=create_http_error(401))
@@ -54,7 +54,7 @@ async def test_store_manager_http_error_handling(store_manager, mock_store_clien
     assert "Error 500" in result.error
 
 @pytest.mark.asyncio
-async def test_store_manager_unexpected_error_handling(store_manager, mock_store_client):
+async def test_store_manager_unexpected_error_handling(store_manager:StoreManager, mock_store_client):
     """Test StoreManager handling of unexpected exceptions."""
     mock_store_client.list_entities = AsyncMock(side_effect=Exception("Boom"))
     result = await store_manager.list_entities()
@@ -91,8 +91,8 @@ async def test_store_manager_unexpected_error_handling(store_manager, mock_store
     assert result.is_error
     assert "Unexpected error: Boom" in result.error
 
-    mock_store_client.get_config = AsyncMock(side_effect=Exception("Boom"))
-    result = await store_manager.get_config()
+    mock_store_client.get_pref = AsyncMock(side_effect=Exception("Boom"))
+    result = await store_manager.get_pref()
     assert result.is_error
     assert "Unexpected error: Boom" in result.error
 
@@ -102,7 +102,7 @@ async def test_store_manager_unexpected_error_handling(store_manager, mock_store
     assert "Unexpected error: Boom" in result.error
 
 @pytest.mark.asyncio
-async def test_store_manager_json_decode_error_handling(store_manager, mock_store_client):
+async def test_store_manager_json_decode_error_handling(store_manager:StoreManager, mock_store_client):
     """Test StoreManager handling of non-JSON error responses."""
     response = MagicMock(spec=httpx.Response)
     response.status_code = 500

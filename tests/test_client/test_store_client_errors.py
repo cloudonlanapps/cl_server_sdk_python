@@ -35,7 +35,7 @@ async def test_store_client_uninitialized_errors():
         await client.delete_all_entities()
 
     with pytest.raises(RuntimeError, match="Client not initialized"):
-        await client.get_config()
+        await client.get_pref()
 
     with pytest.raises(RuntimeError, match="Client not initialized"):
         await client.update_guest_mode(True)

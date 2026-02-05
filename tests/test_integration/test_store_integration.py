@@ -19,12 +19,13 @@ from pathlib import Path as PathlibPath
 import pytest
 
 sys.path.insert(0, str(PathlibPath(__file__).parent.parent))
+from cl_client import StoreManager
 from conftest import AuthConfig, get_expected_error, should_succeed
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_entities(store_manager, auth_config: AuthConfig):
+async def test_list_entities(store_manager:StoreManager, auth_config: AuthConfig):
     """Test listing entities with pagination."""
     if should_succeed(auth_config, operation_type="store_read"):
         # Should succeed
@@ -45,7 +46,7 @@ async def test_list_entities(store_manager, auth_config: AuthConfig):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_entities_with_search(store_manager, auth_config: AuthConfig):
+async def test_list_entities_with_search(store_manager:StoreManager, auth_config: AuthConfig):
     """Test listing entities with search query."""
     if should_succeed(auth_config, operation_type="store_read"):
         result = await store_manager.list_entities(
@@ -61,7 +62,7 @@ async def test_list_entities_with_search(store_manager, auth_config: AuthConfig)
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_list_entities_exclude_deleted(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -113,7 +114,7 @@ async def test_list_entities_exclude_deleted(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_create_entity_collection(store_manager, auth_config: AuthConfig):
+async def test_create_entity_collection(store_manager:StoreManager, auth_config: AuthConfig):
     """Test creating a collection (folder) entity."""
     if should_succeed(auth_config, operation_type="store_write"):
         # Should succeed - create collection
@@ -146,7 +147,7 @@ async def test_create_entity_collection(store_manager, auth_config: AuthConfig):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_create_entity_with_file(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -184,7 +185,7 @@ async def test_create_entity_with_file(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_read_entity(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -219,7 +220,7 @@ async def test_read_entity(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_update_entity(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -255,7 +256,7 @@ async def test_update_entity(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_patch_entity(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -289,7 +290,7 @@ async def test_patch_entity(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_patch_entity_soft_delete(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -328,7 +329,7 @@ async def test_patch_entity_soft_delete(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_patch_entity_unset(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -374,7 +375,7 @@ async def test_patch_entity_unset(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_delete_entity(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -403,7 +404,7 @@ async def test_delete_entity(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_versions(
-    store_manager,
+    store_manager:StoreManager,
     unique_test_image: Path,
     auth_config: AuthConfig,
 ):
@@ -441,17 +442,17 @@ async def test_get_versions(
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_admin_get_config(store_manager, auth_config: AuthConfig):
+async def test_admin_get_config(store_manager:StoreManager, auth_config: AuthConfig):
     """Test getting store configuration (admin only)."""
     if should_succeed(auth_config, operation_type="admin"):
         # Should succeed for admin
-        result = await store_manager.get_config()
+        result = await store_manager.get_pref()
         assert result.is_success, f"Expected success but got error: {result.error}"
         assert result.data is not None
         assert isinstance(result.data.guest_mode, bool)
     else:
         # Should fail for non-admin
-        result = await store_manager.get_config()
+        result = await store_manager.get_pref()
         assert result.is_error
         # Error should indicate permission denied
         assert result.error is not None
@@ -460,22 +461,25 @@ async def test_admin_get_config(store_manager, auth_config: AuthConfig):
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.admin_only
-async def test_admin_update_read_auth(store_manager, auth_config: AuthConfig):
+async def test_admin_update_read_auth(store_manager:StoreManager, auth_config: AuthConfig):
     """Test updating read auth configuration (admin only)."""
     if should_succeed(auth_config, operation_type="admin"):
         # Get current config
-        get_result = await store_manager.get_config()
+        get_result = await store_manager.get_pref()
         assert get_result.is_success
+        assert get_result.data is not None
         original_guest_mode = get_result.data.guest_mode
 
         # Toggle guest mode
         update_result = await store_manager.update_guest_mode(guest_mode=not original_guest_mode)
         assert update_result.is_success
+        assert update_result.data is not None
         assert update_result.data.guest_mode == (not original_guest_mode)
 
         # Restore original setting
         restore_result = await store_manager.update_guest_mode(guest_mode=original_guest_mode)
         assert restore_result.is_success
+        assert restore_result.data is not None
         assert restore_result.data.guest_mode == original_guest_mode
     else:
         # Should fail for non-admin

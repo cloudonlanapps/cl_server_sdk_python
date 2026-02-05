@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 from cl_client import StoreManager
+from tests.test_utils import create_unique_copy
+from loguru import logger
 
 TEST_VECTORS_DIR = Path(
     os.getenv("TEST_VECTORS_DIR", str(Path.home() / "cl_server_test_media"))
@@ -29,8 +31,7 @@ async def test_concurrent_uploads_with_timeout_fix(
     tmp_path: Path,
 ):
     """Verify that timeout and database lock fixes allow concurrent uploads."""
-    from .test_utils import create_unique_copy
-    from loguru import logger
+    
 
     created_entities = []
 
