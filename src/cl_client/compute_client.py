@@ -142,6 +142,28 @@ class ComputeClient(ClientProtocol):
         _ = response.raise_for_status()
         return True
 
+    async def get_guest_mode(self) -> bool:
+        """Get current guest mode configuration (admin only).
+
+        Returns:
+            Current guest mode status
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (401, 403, etc.)
+        """
+        if not self._session:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        headers = await self._get_request_headers()
+        response = await self._session.get(
+            f"{self.base_url}/admin/pref/guest-mode",
+            headers=headers,
+        )
+        _ = response.raise_for_status()
+        # Expecting JSON response like {"guest_mode": true}
+        data = response.json()
+        return bool(data.get("guest_mode", False))
+
     # ============================================================================
     # Job Management (REST API)
     # ============================================================================

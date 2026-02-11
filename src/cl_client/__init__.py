@@ -11,6 +11,11 @@ from .auth_models import (
     UserResponse,
     UserUpdateRequest,
 )
+from .intelligence_models import (
+    FaceResponse,
+    EntityJobResponse,
+    KnownPersonResponse,
+)
 from .compute_client import ComputeClient
 from .config import ComputeClientConfig
 from .exceptions import (
@@ -72,6 +77,10 @@ __all__ = [
     "JWTAuthProvider",
     "get_default_auth",
     "SessionManager",
+    # Intelligence Models
+    "FaceResponse",
+    "EntityJobResponse",
+    "KnownPersonResponse",
     # Store
     "StoreManager",
     # MQTT
