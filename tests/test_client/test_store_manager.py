@@ -120,6 +120,15 @@ class TestStoreManagerReadOperations:
             page_size=20,
             search_query=None,
             exclude_deleted=False,
+            md5=None,
+            mime_type=None,
+            type_=None,
+            width=None,
+            height=None,
+            file_size_min=None,
+            file_size_max=None,
+            date_from=None,
+            date_to=None,
         )
 
     @pytest.mark.asyncio
@@ -150,6 +159,15 @@ class TestStoreManagerReadOperations:
             page_size=10,
             search_query="test query",
             exclude_deleted=False,
+            md5=None,
+            mime_type=None,
+            type_=None,
+            width=None,
+            height=None,
+            file_size_min=None,
+            file_size_max=None,
+            date_from=None,
+            date_to=None,
         )
 
     @pytest.mark.asyncio
@@ -383,7 +401,7 @@ class TestStoreManagerErrorHandling:
         result = await store_manager.list_entities()
 
         assert result.is_error
-        assert result.error == "Unauthorized: Invalid or missing token"
+        assert result.error == "Unauthorized: Invalid token"
         assert result.data is None
 
     @pytest.mark.asyncio

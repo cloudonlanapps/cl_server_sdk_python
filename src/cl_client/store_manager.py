@@ -199,14 +199,21 @@ class StoreManager:
             detail = str(error)
 
         if status_code == 401:
-            return StoreOperationResult(error="Unauthorized: Invalid or missing token")
+            prefix = "Unauthorized"
         elif status_code == 403:
-            return StoreOperationResult(error="Forbidden: Insufficient permissions")
+            prefix = "Forbidden"
         elif status_code == 404:
-            return StoreOperationResult(error=f"Not Found: {detail}")
+            prefix = "Not Found"
         elif status_code == 422:
-            return StoreOperationResult(error=f"Validation Error: {detail}")
-            return StoreOperationResult(error=f"Error {status_code}: {detail}")
+            prefix = "Validation Error"
+        else:
+            prefix = f"Error {status_code}"
+
+        return StoreOperationResult[object](
+            error=f"{prefix}: {detail}",
+        )
+
+
 
     # Multimedia operations
 

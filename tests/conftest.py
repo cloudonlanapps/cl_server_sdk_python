@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel
+
 import asyncio
 from tests.test_utils import create_unique_copy
 
@@ -77,58 +77,14 @@ TEST_ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================================
 
 
-class CliConfig(BaseModel):
-    """CLI configuration from pytest arguments."""
-    auth_url: str
-    compute_url: str
-    store_url: str
-    mqtt_url: str
-    username: str | None
-    password: str | None
-
-
-class ServerRootResponse(BaseModel):
-    """Server root endpoint response (health check)."""
-    status: str
-    service: str
-    version: str
-    guestMode: str = "off"  # "on" or "off"
-    auth_required: bool = True  # Only from compute service
-
-
-class ComputeServerInfo(BaseModel):
-    """Compute server capability information."""
-    auth_required: bool = True
-    guest_mode: bool = False  # Converted from "on"/"off" string
-
-
-class StoreServerInfo(BaseModel):
-    """Store server capability information."""
-    guest_mode: bool = False  # Converted from "on"/"off" string
-
-
-class UserInfo(BaseModel):
-    """Current user information from /users/me."""
-    id: int
-    username: str
-    is_admin: bool
-    is_active: bool
-    permissions: list[str]
-
-
-class AuthConfig(BaseModel):
-    """Complete auth configuration for tests."""
-    mode: str  # "auth" or "no-auth"
-    auth_url: str
-    compute_url: str
-    store_url: str
-    mqtt_url: str
-    compute_auth_required: bool
-    compute_guest_mode: bool
-    store_guest_mode: bool
-    username: str | None
-    password: str | None
-    user_info: UserInfo | None
+from tests.test_utils import (
+    CliConfig,
+    ServerRootResponse,
+    ComputeServerInfo,
+    StoreServerInfo,
+    UserInfo,
+    AuthConfig,
+)
 
 
 # ============================================================================
@@ -413,7 +369,7 @@ async def client(test_client: ComputeClient) -> ComputeClient:
 
 
 @pytest_asyncio.fixture
-async def store_manager(auth_config: AuthConfig):
+async def store_manager(auth_config: AuthConfig, created_entities: set[int]):
     """Create StoreManager with auth based on config."""
     from cl_client.store_manager import StoreManager
 
@@ -454,10 +410,7 @@ async def store_manager(auth_config: AuthConfig):
     async def tracked_create(*args, **kwargs):
         res = await original_create(*args, **kwargs)
         if res.is_success and res.data:
-            # Note: Conftest is a bit tricky with imports, using global state might be easier
-            # but let's try to find the fixture value if possible, or use a global.
-            # Using a global in this module for simplicity as it's a test helper.
-            _track_entity_id(res.data.id)
+            created_entities.add(res.data.id)
         return res
     
     mgr.create_entity = tracked_create
@@ -469,13 +422,7 @@ async def store_manager(auth_config: AuthConfig):
     await session.close()
 
 
-# Global set to track entities across trials within the same process
-_CREATED_ENTITY_IDS: set[int] = set()
 
-
-def _track_entity_id(entity_id: int) -> None:
-    """Internal helper to track entity IDs."""
-    _CREATED_ENTITY_IDS.add(entity_id)
 
 
 @pytest.fixture
@@ -584,88 +531,4 @@ def test_video_720p(media_dir: Path) -> Path:
 # ============================================================================
 
 
-@pytest_asyncio.fixture(scope="function", autouse=True)
-async def cleanup_store_entities(
-    request: pytest.FixtureRequest,
-    auth_config: AuthConfig,  # AuthConfig Pydantic model from parent conftest
-):
-    """Clean up all store entities before store integration tests run.
 
-    Runs only for test_store_integration.py.
-    Uses CLI-provided auth credentials.
-    """
-
-    # All integration tests in this folder use the store
-    import logging
-    logging.info(f"Cleaning up store for module: {request.module.__name__}")
-
-    # Skip cleanup if no auth (cannot delete entities)
-    if not auth_config.username:
-        yield
-        return
-
-    # Bulk cleanup logic
-    try:
-        username = auth_config.username
-        password = auth_config.password
-        auth_url = auth_config.auth_url
-        compute_url = auth_config.compute_url
-        store_url = auth_config.store_url
-
-        from cl_client import ServerPref, SessionManager
-
-        config = ServerPref(
-            auth_url=auth_url,
-            compute_url=compute_url,
-            store_url=store_url,
-            mqtt_url=auth_config.mqtt_url,
-        )
-        
-        async with SessionManager(server_pref=config) as session:
-            await session.login(username, password)
-            async with session.create_store_manager() as mgr:
-                # 1. Try to delete specifically tracked entities first
-                if _CREATED_ENTITY_IDS:
-                    import logging
-                    logging.info(f"Cleaning up {len(_CREATED_ENTITY_IDS)} tracked entities...")
-                    # Copy set to avoid modification during iteration
-                    ids_to_delete = list(_CREATED_ENTITY_IDS)
-                    for entity_id in ids_to_delete:
-                        try:
-                            # Use force=True to handle soft-deletion automatically
-                            _ = await mgr.delete_entity(entity_id, force=True)
-                        except Exception as e:
-                            logging.warning(f"Failed to delete tracked entity {entity_id}: {e}")
-                        _CREATED_ENTITY_IDS.discard(entity_id)
-                    
-                    logging.info("Tracked cleanup complete.")
-
-                    # Verify deletion with audit report
-                    audit_res = await mgr.get_audit_report()
-                    if audit_res.is_success and audit_res.data:
-                        report = audit_res.data
-                        # Check for remaining Orphans related to our tracked IDs
-                        orphaned_ids = set()
-                        for f in report.orphaned_files:
-                            # Heuristic: file path usually contains entity ID? 
-                            # Actually server OrphanedFaceInfo and OrphanedMqttInfo have entity_id
-                            pass
-                        
-                        for face in report.orphaned_faces:
-                            if face.entity_id in ids_to_delete:
-                                orphaned_ids.add(face.entity_id)
-                        
-                        for mqtt in report.orphaned_mqtt:
-                            if mqtt.entity_id in ids_to_delete:
-                                orphaned_ids.add(mqtt.entity_id)
-                        
-                        if orphaned_ids:
-                            logging.warning(f"Entities {orphaned_ids} were deleted but left orphans in audit report!")
-
-
-    except Exception as e:
-        # Non-fatal cleanup failure
-        import logging
-        logging.warning(f"Cleanup failed: {e}")
-
-    yield
