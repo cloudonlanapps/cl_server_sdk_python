@@ -128,6 +128,16 @@ class StoreClient:
         search_query: str | None = None,
         version: int | None = None,
         exclude_deleted: bool = False,
+        # New filters
+        md5: str | None = None,
+        mime_type: str | None = None,
+        type_: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        file_size_min: int | None = None,
+        file_size_max: int | None = None,
+        date_from: int | None = None,
+        date_to: int | None = None,
     ) -> EntityListResponse:
         """List entities with pagination and optional search.
 
@@ -137,6 +147,15 @@ class StoreClient:
             search_query: Optional search query for label/description
             version: Optional version number to retrieve
             exclude_deleted: Whether to exclude soft-deleted entities
+            md5: Filter by MD5
+            mime_type: Filter by MIME type
+            type_: Filter by media type
+            width: Filter by precise width
+            height: Filter by precise height
+            file_size_min: Filter by min size
+            file_size_max: Filter by max size
+            date_from: Filter by date from (ms)
+            date_to: Filter by date to (ms)
 
         Returns:
             EntityListResponse with items and pagination metadata
@@ -157,15 +176,26 @@ class StoreClient:
             params["version"] = version
         if exclude_deleted:
             params["exclude_deleted"] = "true"
-        # Type check doesn't know about filter_param yet in args, adding it manually
-        # implementation details below
-
-        if search_query:
-            params["search_query"] = search_query
-        if version is not None:
-            params["version"] = version
-        if exclude_deleted:
-            params["exclude_deleted"] = "true"
+        
+        # New filters
+        if md5:
+            params["md5"] = md5
+        if mime_type:
+            params["mime_type"] = mime_type
+        if type_:
+            params["type"] = type_
+        if width is not None:
+            params["width"] = width
+        if height is not None:
+            params["height"] = height
+        if file_size_min is not None:
+            params["file_size_min"] = file_size_min
+        if file_size_max is not None:
+            params["file_size_max"] = file_size_max
+        if date_from is not None:
+            params["date_from"] = date_from
+        if date_to is not None:
+            params["date_to"] = date_to
 
         response = await self._client.get(
             f"{self._base_url}/entities",
@@ -174,6 +204,63 @@ class StoreClient:
         )
         _ = response.raise_for_status()
         return EntityListResponse.model_validate(response.json())
+
+    # Multimedia operations
+
+    async def download_media(self, entity_id: int) -> bytes:
+        """Download the original media file for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Raw file bytes
+
+        Raises:
+            httpx.HTTPStatusError: If request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/media",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.content
+
+    async def download_preview(self, entity_id: int) -> bytes:
+        """Download the preview image for an entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Raw preview image bytes
+
+        Raises:
+            httpx.HTTPStatusError: If request fails
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/{entity_id}/preview",
+            headers=await self._get_headers(),
+        )
+        _ = response.raise_for_status()
+        return response.content
+
+    def get_stream_url(self, entity_id: int) -> str:
+        """Get the HLS stream URL for an entity.
+        
+        Args:
+            entity_id: Entity ID
+            
+        Returns:
+            Absolute URL to the HLS manifest
+        """
+        return f"{self._base_url}/entities/{entity_id}/stream/adaptive.m3u8"
 
     async def read_entity(
         self,

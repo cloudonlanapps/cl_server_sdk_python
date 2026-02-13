@@ -206,8 +206,61 @@ class StoreManager:
             return StoreOperationResult(error=f"Not Found: {detail}")
         elif status_code == 422:
             return StoreOperationResult(error=f"Validation Error: {detail}")
-        else:
             return StoreOperationResult(error=f"Error {status_code}: {detail}")
+
+    # Multimedia operations
+
+    async def download_media(self, entity_id: int) -> StoreOperationResult[bytes]:
+        """Download original media file.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with raw bytes
+        """
+        try:
+            data = await self._store_client.download_media(entity_id)
+            return StoreOperationResult[bytes](
+                success="Media downloaded successfully",
+                data=data,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bytes], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bytes](error=f"Unexpected error: {str(e)}")
+
+    async def download_preview(self, entity_id: int) -> StoreOperationResult[bytes]:
+        """Download preview image.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            StoreOperationResult with raw bytes
+        """
+        try:
+            data = await self._store_client.download_preview(entity_id)
+            return StoreOperationResult[bytes](
+                success="Preview downloaded successfully",
+                data=data,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[bytes], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[bytes](error=f"Unexpected error: {str(e)}")
+
+    def get_stream_url(self, entity_id: int) -> str:
+        """Get HLS stream URL.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Absolute URL to stream manifest
+        """
+        return self._store_client.get_stream_url(entity_id)
+
 
     # Read operations
 
@@ -218,6 +271,15 @@ class StoreManager:
 
         search_query: str | None = None,
         exclude_deleted: bool = False,
+        md5: str | None = None,
+        mime_type: str | None = None,
+        type_: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        file_size_min: int | None = None,
+        file_size_max: int | None = None,
+        date_from: int | None = None,
+        date_to: int | None = None,
     ) -> StoreOperationResult[EntityListResponse]:
         """List entities with pagination and optional search.
 
@@ -226,9 +288,15 @@ class StoreManager:
             page_size: Items per page (max 100)
             search_query: Optional search query for label/description
             exclude_deleted: Whether to exclude soft-deleted entities
-
-        Returns:
-            StoreOperationResult containing EntityListResponse or error
+            md5: Filter by MD5
+            mime_type: Filter by MIME type
+            type_: Filter by media type
+            width: Filter by precise width
+            height: Filter by precise height
+            file_size_min: Filter by min size
+            file_size_max: Filter by max size
+            date_from: Filter by date from (ms)
+            date_to: Filter by date to (ms)
         """
         try:
             result = await self._store_client.list_entities(
@@ -236,6 +304,15 @@ class StoreManager:
                 page_size=page_size,
                 search_query=search_query,
                 exclude_deleted=exclude_deleted,
+                md5=md5,
+                mime_type=mime_type,
+                type_=type_,
+                width=width,
+                height=height,
+                file_size_min=file_size_min,
+                file_size_max=file_size_max,
+                date_from=date_from,
+                date_to=date_to,
             )
             return StoreOperationResult[EntityListResponse](
                 success="Entities retrieved successfully",
