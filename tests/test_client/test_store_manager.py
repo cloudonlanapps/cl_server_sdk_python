@@ -129,6 +129,8 @@ class TestStoreManagerReadOperations:
             file_size_max=None,
             date_from=None,
             date_to=None,
+            parent_id=None,
+            is_collection=None,
         )
 
     @pytest.mark.asyncio
@@ -168,7 +170,78 @@ class TestStoreManagerReadOperations:
             file_size_max=None,
             date_from=None,
             date_to=None,
+            parent_id=None,
+            is_collection=None,
         )
+
+    @pytest.mark.asyncio
+    async def test_list_entities_with_parent_id(self, store_manager, mock_store_client):
+        """Test entity listing with parent_id filter."""
+        expected_response = EntityListResponse(
+            items=[],
+            pagination=EntityPagination(
+                page=1, page_size=20, total_items=0, total_pages=0,
+                has_next=False, has_prev=False,
+            ),
+        )
+        mock_store_client.list_entities.return_value = expected_response
+
+        result = await store_manager.list_entities(parent_id=5)
+
+        assert result.is_success
+        mock_store_client.list_entities.assert_called_once_with(
+            page=1, page_size=20, search_query=None, exclude_deleted=False,
+            md5=None, mime_type=None, type_=None, width=None, height=None,
+            file_size_min=None, file_size_max=None, date_from=None, date_to=None,
+            parent_id=5, is_collection=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_entities_with_is_collection(self, store_manager, mock_store_client):
+        """Test entity listing with is_collection filter."""
+        expected_response = EntityListResponse(
+            items=[],
+            pagination=EntityPagination(
+                page=1, page_size=20, total_items=0, total_pages=0,
+                has_next=False, has_prev=False,
+            ),
+        )
+        mock_store_client.list_entities.return_value = expected_response
+
+        result = await store_manager.list_entities(is_collection=True)
+
+        assert result.is_success
+        mock_store_client.list_entities.assert_called_once_with(
+            page=1, page_size=20, search_query=None, exclude_deleted=False,
+            md5=None, mime_type=None, type_=None, width=None, height=None,
+            file_size_min=None, file_size_max=None, date_from=None, date_to=None,
+            parent_id=None, is_collection=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_lookup_entity_success(self, store_manager, mock_store_client):
+        """Test successful entity lookup."""
+        expected_entity = Entity(id=42, label="Found", md5="abc123")
+        mock_store_client.lookup_entity.return_value = expected_entity
+
+        result = await store_manager.lookup_entity(md5="abc123")
+
+        assert result.is_success
+        assert result.data == expected_entity
+        assert result.success == "Entity lookup successful"
+        mock_store_client.lookup_entity.assert_called_once_with(
+            md5="abc123", label=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_lookup_entity_not_found(self, store_manager, mock_store_client):
+        """Test entity lookup when not found."""
+        mock_store_client.lookup_entity.return_value = None
+
+        result = await store_manager.lookup_entity(md5="nonexistent")
+
+        assert result.is_success
+        assert result.data is None
 
     @pytest.mark.asyncio
     async def test_read_entity_success(self, store_manager, mock_store_client):

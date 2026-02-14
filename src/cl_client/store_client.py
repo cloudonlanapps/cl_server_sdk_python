@@ -138,6 +138,8 @@ class StoreClient:
         file_size_max: int | None = None,
         date_from: int | None = None,
         date_to: int | None = None,
+        parent_id: int | None = None,
+        is_collection: bool | None = None,
     ) -> EntityListResponse:
         """List entities with pagination and optional search.
 
@@ -156,6 +158,8 @@ class StoreClient:
             file_size_max: Filter by max size
             date_from: Filter by date from (ms)
             date_to: Filter by date to (ms)
+            parent_id: Filter by parent collection ID (0 = root-level items)
+            is_collection: Filter by collection (true) vs media item (false)
 
         Returns:
             EntityListResponse with items and pagination metadata
@@ -196,6 +200,10 @@ class StoreClient:
             params["date_from"] = date_from
         if date_to is not None:
             params["date_to"] = date_to
+        if parent_id is not None:
+            params["parent_id"] = parent_id
+        if is_collection is not None:
+            params["is_collection"] = "true" if is_collection else "false"
 
         response = await self._client.get(
             f"{self._base_url}/entities",
@@ -204,6 +212,44 @@ class StoreClient:
         )
         _ = response.raise_for_status()
         return EntityListResponse.model_validate(response.json())
+
+    async def lookup_entity(
+        self,
+        md5: str | None = None,
+        label: str | None = None,
+    ) -> Entity | None:
+        """Lookup a single entity by MD5 or label.
+
+        Args:
+            md5: MD5 to lookup (searches media items)
+            label: Label to lookup (searches collections)
+
+        Returns:
+            Entity if found, None if not found
+
+        Raises:
+            httpx.HTTPStatusError: If the request fails (except 404)
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized. Use 'async with' context manager.")
+
+        params: dict[str, str] = {}
+        if md5:
+            params["md5"] = md5
+        if label:
+            params["label"] = label
+
+        response = await self._client.get(
+            f"{self._base_url}/entities/lookup",
+            params=params,
+            headers=await self._get_headers(),
+        )
+
+        if response.status_code == 404:
+            return None
+
+        _ = response.raise_for_status()
+        return Entity.model_validate(response.json())
 
     # Multimedia operations
 

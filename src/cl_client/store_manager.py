@@ -287,6 +287,8 @@ class StoreManager:
         file_size_max: int | None = None,
         date_from: int | None = None,
         date_to: int | None = None,
+        parent_id: int | None = None,
+        is_collection: bool | None = None,
     ) -> StoreOperationResult[EntityListResponse]:
         """List entities with pagination and optional search.
 
@@ -304,6 +306,8 @@ class StoreManager:
             file_size_max: Filter by max size
             date_from: Filter by date from (ms)
             date_to: Filter by date to (ms)
+            parent_id: Filter by parent collection ID (0 = root-level items)
+            is_collection: Filter by collection (true) vs media item (false)
         """
         try:
             result = await self._store_client.list_entities(
@@ -320,6 +324,8 @@ class StoreManager:
                 file_size_max=file_size_max,
                 date_from=date_from,
                 date_to=date_to,
+                parent_id=parent_id,
+                is_collection=is_collection,
             )
             return StoreOperationResult[EntityListResponse](
                 success="Entities retrieved successfully",
@@ -329,6 +335,31 @@ class StoreManager:
             return cast(StoreOperationResult[EntityListResponse], self._handle_error(e))
         except Exception as e:
             return StoreOperationResult[EntityListResponse](error=f"Unexpected error: {str(e)}")
+
+    async def lookup_entity(
+        self,
+        md5: str | None = None,
+        label: str | None = None,
+    ) -> StoreOperationResult[Entity | None]:
+        """Lookup a single entity by MD5 or label.
+
+        Args:
+            md5: MD5 to lookup (searches media items)
+            label: Label to lookup (searches collections)
+        """
+        try:
+            result = await self._store_client.lookup_entity(
+                md5=md5,
+                label=label,
+            )
+            return StoreOperationResult[Entity | None](
+                success="Entity lookup successful",
+                data=result,
+            )
+        except httpx.HTTPStatusError as e:
+            return cast(StoreOperationResult[Entity | None], self._handle_error(e))
+        except Exception as e:
+            return StoreOperationResult[Entity | None](error=f"Unexpected error: {str(e)}")
 
     async def read_entity(
         self,

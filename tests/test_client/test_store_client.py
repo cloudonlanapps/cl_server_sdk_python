@@ -119,6 +119,109 @@ class TestStoreClientReadOperations:
         assert call_args[1]["params"]["search_query"] == "test"
 
     @pytest.mark.asyncio
+    async def test_list_entities_with_parent_id(self, store_client, mock_httpx_client):
+        """Test listing entities with parent_id filter."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "items": [],
+            "pagination": {
+                "page": 1,
+                "page_size": 20,
+                "total_items": 0,
+                "total_pages": 0,
+                "has_next": False,
+                "has_prev": False,
+            },
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        await store_client.list_entities(parent_id=5)
+
+        call_args = mock_httpx_client.get.call_args
+        assert call_args[1]["params"]["parent_id"] == 5
+
+    @pytest.mark.asyncio
+    async def test_list_entities_with_parent_id_zero(self, store_client, mock_httpx_client):
+        """Test listing root-level entities with parent_id=0."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "items": [],
+            "pagination": {
+                "page": 1,
+                "page_size": 20,
+                "total_items": 0,
+                "total_pages": 0,
+                "has_next": False,
+                "has_prev": False,
+            },
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        await store_client.list_entities(parent_id=0)
+
+        call_args = mock_httpx_client.get.call_args
+        assert call_args[1]["params"]["parent_id"] == 0
+
+    @pytest.mark.asyncio
+    async def test_list_entities_with_is_collection(self, store_client, mock_httpx_client):
+        """Test listing entities with is_collection filter."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "items": [],
+            "pagination": {
+                "page": 1,
+                "page_size": 20,
+                "total_items": 0,
+                "total_pages": 0,
+                "has_next": False,
+                "has_prev": False,
+            },
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        await store_client.list_entities(is_collection=True)
+
+        call_args = mock_httpx_client.get.call_args
+        assert call_args[1]["params"]["is_collection"] == "true"
+
+    @pytest.mark.asyncio
+    async def test_lookup_entity_by_md5(self, store_client, mock_httpx_client):
+        """Test looking up an entity by MD5."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": 42,
+            "label": "Found Entity",
+            "md5": "abc123",
+        }
+        mock_response.raise_for_status = Mock()
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.lookup_entity(md5="abc123")
+
+        assert isinstance(result, Entity)
+        assert result.id == 42
+        assert result.md5 == "abc123"
+
+        call_args = mock_httpx_client.get.call_args
+        assert "entities/lookup" in call_args[0][0]
+        assert call_args[1]["params"]["md5"] == "abc123"
+
+    @pytest.mark.asyncio
+    async def test_lookup_entity_not_found(self, store_client, mock_httpx_client):
+        """Test looking up an entity that doesn't exist."""
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_httpx_client.get.return_value = mock_response
+
+        result = await store_client.lookup_entity(md5="nonexistent")
+
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_read_entity(self, store_client, mock_httpx_client):
         """Test reading entity by ID."""
         mock_response = Mock()
