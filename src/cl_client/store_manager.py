@@ -558,7 +558,7 @@ class StoreManager:
         description: str | None = None,
         is_collection: bool = False,
         parent_id: int | None = None,
-        image_path: Path | None = None,
+        media_path: Path | None = None,
     ) -> StoreOperationResult[Entity]:
         """Create a new entity with optional file upload.
 
@@ -569,7 +569,7 @@ class StoreManager:
             description: Optional description
             is_collection: Whether this is a collection (folder) or media item
             parent_id: Optional parent collection ID
-            image_path: Optional path to media file to upload
+            media_path: Optional path to media file to upload
 
         Returns:
             StoreOperationResult containing created Entity or error
@@ -580,7 +580,7 @@ class StoreManager:
                 label=label,
                 description=description,
                 parent_id=parent_id,
-                image_path=image_path,
+                media_path=media_path,
             )
             return StoreOperationResult[Entity](
                 success="Entity created successfully",
@@ -598,7 +598,7 @@ class StoreManager:
         description: str | None = None,
         is_collection: bool = False,
         parent_id: int | None = None,
-        image_path: Path | None = None,
+        media_path: Path | None = None,
     ) -> StoreOperationResult[Entity]:
         """Full update of an entity (PUT).
 
@@ -610,7 +610,7 @@ class StoreManager:
             description: Optional new description
             is_collection: Whether this is a collection
             parent_id: Optional new parent ID
-            image_path: Optional new media file
+            media_path: Optional new media file
 
         Returns:
             StoreOperationResult containing updated Entity or error
@@ -622,7 +622,7 @@ class StoreManager:
                 label=label,
                 description=description,
                 parent_id=parent_id,
-                image_path=image_path,
+                media_path=media_path,
             )
             return StoreOperationResult[Entity](
                 success="Entity updated successfully",

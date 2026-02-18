@@ -369,7 +369,7 @@ class StoreClient:
         self,
         is_collection: bool,
         label: str | None = None,
-        image_path: Path | None = None,
+        media_path: Path | None = None,
         description: str | None = None,
         parent_id: int | None = None,
     ) -> Entity:
@@ -378,7 +378,7 @@ class StoreClient:
         Args:
             is_collection: True if creating a collection
             label: Entity label
-            image_path: Optional path to image file
+            media_path: Optional path to media file
             description: Optional description
             parent_id: Optional parent collection ID
 
@@ -404,8 +404,8 @@ class StoreClient:
         files = None
         opened_files = None
         try:
-            if image_path:
-                files = {"image": image_path}
+            if media_path:
+                files = {"media_file": media_path}
                 opened_files = HttpUtils.open_multipart_files(files)
 
             response = await self._client.post(
@@ -427,7 +427,7 @@ class StoreClient:
         label: str,
         description: str | None = None,
         parent_id: int | None = None,
-        image_path: Path | None = None,
+        media_path: Path | None = None,
     ) -> Entity:
         """Update an existing entity.
 
@@ -437,7 +437,7 @@ class StoreClient:
             label: New label
             description: Optional new description
             parent_id: Optional parent collection ID
-            image_path: Optional new image file
+            media_path: Optional new media file
 
         Returns:
             Updated Entity
@@ -460,8 +460,8 @@ class StoreClient:
         files = None
         opened_files = None
         try:
-            if image_path:
-                files = {"image": image_path}
+            if media_path:
+                files = {"media_file": media_path}
                 opened_files = HttpUtils.open_multipart_files(files)
 
             response = await self._client.put(
