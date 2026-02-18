@@ -24,7 +24,11 @@ class HlsStreamingClient(BasePluginClient):
 
     async def generate_manifest(
         self,
-        video: Path,
+        video: Path | None = None,
+        input_absolute_path: str | None = None,
+        output_absolute_path: str | None = None,
+        include_original: bool = True,
+        priority: int = 5,
         wait: bool = False,
         timeout: float | None = None,
         on_progress: OnJobResponseCallback = None,
@@ -33,33 +37,43 @@ class HlsStreamingClient(BasePluginClient):
         """Generate HLS streaming manifest from video.
 
         Args:
-            video: Path to video file
+            video: Path to video file (if uploading)
+            input_absolute_path: Absolute path to input video on worker filesystem
+            output_absolute_path: Absolute path to output directory on worker filesystem
+            include_original: Whether to include original quality without transcoding
+            priority: Job priority (0-10, lower is higher)
             wait: If True, use HTTP polling until completion (secondary workflow)
             timeout: Timeout for wait (optional)
             on_progress: Callback for job progress updates (MQTT, primary workflow)
             on_complete: Callback for job completion (MQTT, primary workflow)
 
         Returns:
-            JobResponse with manifest path in task_output["manifest_path"]
-
-        Example (MQTT callbacks - primary):
-            job = await client.hls_streaming.generate_manifest(
-                video=Path("video.mp4"),
-                on_complete=lambda j: print(f"Manifest: {j.task_output['manifest_path']}")
-            )
-
-        Example (HTTP polling - secondary):
-            job = await client.hls_streaming.generate_manifest(
-                video=Path("video.mp4"),
-                wait=True
-            )
-            manifest = job.task_output["manifest_path"]
-            print(f"HLS manifest ready: {manifest}")
+            JobResponse with manifest path
         """
-        return await self.submit_with_files(
-            files={"file": video},
-            wait=wait,
-            timeout=timeout,
-            on_progress=on_progress,
-            on_complete=on_complete,
-        )
+        params = {
+            "include_original": str(include_original).lower(),
+        }
+        if input_absolute_path:
+            params["input_absolute_path"] = input_absolute_path
+        if output_absolute_path:
+            params["output_absolute_path"] = output_absolute_path
+
+        if video:
+            return await self.submit_with_files(
+                files={"file": video},
+                params=params,
+                priority=priority,
+                wait=wait,
+                timeout=timeout,
+                on_progress=on_progress,
+                on_complete=on_complete,
+            )
+        else:
+            return await self.submit_job(
+                params=params,
+                priority=priority,
+                wait=wait,
+                timeout=timeout,
+                on_progress=on_progress,
+                on_complete=on_complete,
+            )

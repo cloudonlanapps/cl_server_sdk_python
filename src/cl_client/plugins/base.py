@@ -76,10 +76,7 @@ class BasePluginClient:
         on_progress: OnJobResponseCallback = None,
         on_complete: OnJobResponseCallback = None,
     ) -> JobResponse:
-        """Submit job without files (STUB for future file-less plugins).
-
-        This method is a stub for future plugins that don't require file uploads.
-        Currently, all 9 plugins require files, so this raises NotImplementedError.
+        """Submit job without file uploads.
 
         Args:
             params: Task parameters (plugin-specific)
@@ -91,17 +88,32 @@ class BasePluginClient:
 
         Returns:
             JobResponse with job details
-
-        Raises:
-            NotImplementedError: All current plugins require file uploads (use submit_with_files)
         """
-        _ = (params, priority, wait, timeout, on_progress, on_complete)
-        msg = (
-            f"{self.task_type} requires file uploads. "
-            "Use submit_with_files() instead. "
-            "This method is reserved for future file-less plugins."
+
+        # Submit job (accessing protected _session is intentional for plugin clients)
+        job_id = await self.client.http_submit_job(  # type: ignore[reportPrivateUsage]
+            self.endpoint,
+            files=None,
+            data=HttpUtils.build_form_data(params, priority),
         )
-        raise NotImplementedError(msg)
+
+        # Fetch full job details (submission response may be minimal)
+        job = await self.client.get_job(job_id)
+
+        # Subscribe to MQTT callbacks if provided
+        if on_progress or on_complete:
+            _ = self.client.mqtt_subscribe_job_updates(
+                job_id=job.job_id,
+                on_progress=on_progress,
+                on_complete=on_complete,
+                task_type=self.task_type,
+            )
+
+        # Wait for completion if requested (secondary workflow)
+        if wait:
+            job = await self.client.wait_for_job(job_id=job.job_id, timeout=timeout)
+
+        return job
 
     async def submit_with_files(
         self,
